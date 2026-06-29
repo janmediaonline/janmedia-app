@@ -13,49 +13,37 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Generate Project Files
+      - name: Create Android App Code
         run: |
           mkdir -p app/src/main/java/com/janmedia/app
           
-          cat << 'EOF' > settings.gradle
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "JANMEDIA"
-          include ':app'
-          EOF
+          echo "include ':app'" > settings.gradle
           
           cat << 'EOF' > build.gradle
-          plugins {
-              id 'com.android.application' version '8.1.1' apply false
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath "com.android.tools.build:gradle:7.4.2" }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
           }
           EOF
           
           cat << 'EOF' > app/build.gradle
-          plugins { 
-              id 'com.android.application' 
-          }
+          plugins { id 'com.android.application' }
           android {
               namespace 'com.janmedia.app'
-              compileSdk 34
+              compileSdk 33
               defaultConfig {
                   applicationId "com.janmedia.app"
                   minSdk 21
-                  targetSdk 34
+                  targetSdk 33
                   versionCode 1
                   versionName "1.0"
               }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
           }
           EOF
           
@@ -97,10 +85,8 @@ jobs:
           }
           EOF
 
-      - name: Setup Gradle Wrapper and Build
-        run: |
-          gradle wrapper --gradle-version 8.1.1
-          ./gradlew :app:assembleDebug
+      - name: Build APK
+        run: ./gradlew :app:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
