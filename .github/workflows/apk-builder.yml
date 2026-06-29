@@ -87,7 +87,7 @@ jobs:
 
       - name: Build APK
         run: |
-          gradle wrapper
+          gradle wrapper --gradle-version 7.5
           ./gradlew :app:assembleDebug
 
       - name: Upload APK
