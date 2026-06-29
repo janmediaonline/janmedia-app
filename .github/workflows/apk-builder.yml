@@ -59,8 +59,9 @@ jobs:
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
               
-              <application android:label="JANMEDIA" android:theme="@android:style/Theme.NoTitleBar" android:requestLegacyExternalStorage="true">
+              <application android:label="JANMEDIA" android:theme="@android:style/Theme.NoTitleBar" android:requestLegacyExternalStorage="true" android:usesCleartextTraffic="true">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -74,7 +75,9 @@ jobs:
           cat << 'EOF' > app/src/main/java/com/janmedia/app/MainActivity.java
           package com.janmedia.app;
           
+          import android.Manifest;
           import android.app.Activity;
+          import android.os.Build;
           import android.os.Bundle;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
@@ -90,6 +93,7 @@ jobs:
           import android.content.Intent;
           import android.net.Uri;
           import android.webkit.ValueCallback;
+          import java.net.URISyntaxException;
 
           public class MainActivity extends Activity {
               private ValueCallback<Uri[]> mFilePathCallback;
@@ -101,40 +105,60 @@ jobs:
                   WebView webView = new WebView(this);
                   setContentView(webView);
                   
+                  // Request Storage Permissions on startup
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                      requestPermissions(new String[]{
+                          Manifest.permission.WRITE_EXTERNAL_STORAGE, 
+                          Manifest.permission.READ_EXTERNAL_STORAGE,
+                          Manifest.permission.READ_MEDIA_IMAGES
+                      }, 1);
+                  }
+                  
                   WebSettings webSettings = webView.getSettings();
                   webSettings.setJavaScriptEnabled(true);
                   webSettings.setDomStorageEnabled(true);
                   webSettings.setAllowFileAccess(true);
-                  webSettings.setAllowContentAccess(true);
+                  
+                  // VERY IMPORTANT FOR PAYMENTS:
+                  CookieManager.getInstance().setAcceptCookie(true);
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                      CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+                  }
 
-                  // 1. Handle External Apps (UPI, WhatsApp, Intent links)
+                  // UPI AND DEEP LINK FIX
                   webView.setWebViewClient(new WebViewClient() {
-                      @SuppressWarnings("deprecation")
-                      @Override
-                      public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                          return handleUri(url);
-                      }
-
                       @Override
                       public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                          return handleUri(request.getUrl().toString());
-                      }
-
-                      private boolean handleUri(String url) {
+                          String url = request.getUrl().toString();
+                          
+                          // Allow normal web links
                           if (url.startsWith("http://") || url.startsWith("https://")) {
-                              return false; // Load normal links in webview
+                              return false;
                           }
+                          
+                          // Handle UPI, Intent, WhatsApp, Razorpay etc
                           try {
-                              Intent intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
+                              Intent intent;
+                              if (url.startsWith("intent://")) {
+                                  intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
+                                  String fallbackUrl = intent.getStringExtra("browser_fallback_url");
+                                  if (fallbackUrl != null && getPackageManager().resolveActivity(intent, 0) == null) {
+                                      view.loadUrl(fallbackUrl);
+                                      return true;
+                                  }
+                              } else {
+                                  intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                              }
                               startActivity(intent);
                               return true;
                           } catch (Exception e) {
-                              return false;
+                              Toast.makeText(getApplicationContext(), "App not found for this action", Toast.LENGTH_SHORT).show();
+                              return true;
                           }
                       }
                   });
 
-                  // 2. Handle File Uploads (Gallery for Profile Photo)
+                  // GALLERY FIX
                   webView.setWebChromeClient(new WebChromeClient() {
                       @Override
                       public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
@@ -144,18 +168,18 @@ jobs:
                           mFilePathCallback = filePathCallback;
                           Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                           intent.addCategory(Intent.CATEGORY_OPENABLE);
-                          intent.setType("*/*");
+                          intent.setType("image/*");
                           startActivityForResult(Intent.createChooser(intent, "Select Photo"), FILECHOOSER_RESULTCODE);
                           return true;
                       }
                   });
 
-                  // 3. Handle File Downloads (Saving Posters)
+                  // DOWNLOADS FIX
                   webView.setDownloadListener(new DownloadListener() {
                       @Override
                       public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
-                          if(url.startsWith("data:")) {
-                              Toast.makeText(getApplicationContext(), "Please use long press on image to save.", Toast.LENGTH_LONG).show();
+                          if (url.startsWith("blob:") || url.startsWith("data:")) {
+                              Toast.makeText(getApplicationContext(), "Image generation spotted. Please Long-Press the image to save it.", Toast.LENGTH_LONG).show();
                               return;
                           }
                           try {
@@ -181,7 +205,6 @@ jobs:
                   webView.loadUrl("https://janmediaonline.blogspot.com/?m=1");
               }
 
-              // Activity Result for File Chooser
               @Override
               protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
                   if (requestCode == FILECHOOSER_RESULTCODE) {
@@ -202,3 +225,4 @@ jobs:
         with:
           name: JANMEDIA-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+          
