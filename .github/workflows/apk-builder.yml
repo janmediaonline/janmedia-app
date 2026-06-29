@@ -15,7 +15,6 @@ jobs:
 
       - name: Create Android App Code
         run: |
-          # Create all required directories
           mkdir -p app/src/main/java/com/janmedia/app
           mkdir -p app/src/main/res/xml
           mkdir -p app/src/main/res/values
@@ -153,7 +152,7 @@ jobs:
                   super.onCreate(savedInstanceState);
                   
                   final WebView webView = new WebView(this);
-                  webView.setBackgroundColor(Color.WHITE); // Fixes black screen flash
+                  webView.setBackgroundColor(Color.WHITE); 
                   setContentView(webView);
                   
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -169,16 +168,15 @@ jobs:
                   webSettings.setDomStorageEnabled(true);
                   webSettings.setAllowFileAccess(true);
                   
-                  // RAZORPAY UPI FIX: Trick gateway into thinking this is standard Chrome
-                  String userAgent = webSettings.getUserAgentString();
-                  webSettings.setUserAgentString(userAgent.replace("; wv", ""));
+                  // RAZORPAY UPI FIX: Force Standard Mobile Chrome User-Agent
+                  String customUserAgent = "Mozilla/5.0 (Linux; Android 12; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36";
+                  webSettings.setUserAgentString(customUserAgent);
 
                   CookieManager.getInstance().setAcceptCookie(true);
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                       CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
                   }
 
-                  // BRIDGE FOR SHARE & DOWNLOAD OVERRIDES
                   webAppInterface = new WebAppInterface(this);
                   webView.addJavascriptInterface(webAppInterface, "AndroidApp");
 
@@ -187,9 +185,10 @@ jobs:
                       public void onPageFinished(WebView view, String url) {
                           super.onPageFinished(view, url);
                           
-                          // 1. INJECT SHARE API FIX
+                          // 1. ADVANCED SHARE API FIX (Overrides both share and canShare)
                           String jsShareFix = "javascript:(function() {" +
-                                  "navigator.share = function(data) {" +
+                                  "Object.defineProperty(navigator, 'canShare', { get: function() { return function() { return true; }; } });" +
+                                  "Object.defineProperty(navigator, 'share', { get: function() { return function(data) {" +
                                   "  return new Promise((resolve, reject) => {" +
                                   "    if(data.files && data.files.length > 0) {" +
                                   "        var reader = new FileReader();" +
@@ -203,11 +202,11 @@ jobs:
                                   "        resolve();" +
                                   "    }" +
                                   "  });" +
-                                  "};" +
+                                  "}; } });" +
                                   "})();";
                           view.evaluateJavascript(jsShareFix, null);
                           
-                          // 2. INJECT DOWNLOAD FIX (Intercepts a.click() with Data URIs)
+                          // 2. DOWNLOAD FIX
                           String jsDownloadFix = "javascript:(function() {" +
                                   "document.addEventListener('click', function(e) {" +
                                   "    var el = e.target.closest('a[download]');" +
@@ -225,28 +224,34 @@ jobs:
                       public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                           String url = request.getUrl().toString();
                           
-                          // Let WebView handle standard links
                           if (url.startsWith("http://") || url.startsWith("https://")) {
                               return false;
                           }
                           
-                          // UPI AND APP LINKS (PhonePe, GPay, Paytm, WhatsApp, etc.)
-                          try {
-                              Intent intent;
-                              if (url.startsWith("intent://")) {
-                                  intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
-                                  if (getPackageManager().resolveActivity(intent, 0) == null) {
-                                      String fallbackUrl = intent.getStringExtra("browser_fallback_url");
-                                      if (fallbackUrl != null) { view.loadUrl(fallbackUrl); return true; }
+                          // UPI AND INTENT FIX FOR PAYMENTS
+                          if (url.startsWith("intent://")) {
+                              try {
+                                  Intent intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
+                                  if (intent != null) {
+                                      if (getPackageManager().resolveActivity(intent, 0) == null) {
+                                          String fallbackUrl = intent.getStringExtra("browser_fallback_url");
+                                          if (fallbackUrl != null) { view.loadUrl(fallbackUrl); return true; }
+                                      }
+                                      startActivity(intent);
+                                      return true;
                                   }
-                              } else {
-                                  intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                              } catch (Exception e) { return true; }
+                          } else if (url.startsWith("upi://") || url.startsWith("paytmmp://") || url.startsWith("tez://") || url.startsWith("phonepe://")) {
+                              try {
+                                  Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                                  startActivity(intent);
+                                  return true;
+                              } catch (Exception e) {
+                                  Toast.makeText(getApplicationContext(), "UPI App not installed", Toast.LENGTH_SHORT).show();
+                                  return true;
                               }
-                              startActivity(intent);
-                              return true;
-                          } catch (Exception e) {
-                              return true;
                           }
+                          return true;
                       }
                   });
 
