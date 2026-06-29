@@ -16,11 +16,11 @@ jobs:
       - name: Create Android App Code
         run: |
           mkdir -p app/src/main/java/com/janmedia/app
-          mkdir -p app/src/main/res/values
-
+          
           echo "include ':app'" > settings.gradle
-
-          cat <<EOF > build.gradle
+          echo "android.useAndroidX=true" > gradle.properties
+          
+          cat << 'EOF' > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath "com.android.tools.build:gradle:8.1.1" }
@@ -29,8 +29,8 @@ jobs:
               repositories { google(); mavenCentral() }
           }
           EOF
-
-          cat <<EOF > app/build.gradle
+          
+          cat << 'EOF' > app/build.gradle
           plugins { id 'com.android.application' }
           android {
               namespace 'com.janmedia.app'
@@ -43,16 +43,13 @@ jobs:
                   versionName "1.0"
               }
           }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
           EOF
-
-          cat <<EOF > app/src/main/AndroidManifest.xml
+          
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <application android:label="JANMEDIA" android:theme="@style/Theme.AppCompat.NoActionBar">
+              <application android:label="JANMEDIA" android:theme="@android:style/Theme.NoTitleBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -62,16 +59,16 @@ jobs:
               </application>
           </manifest>
           EOF
-
-          cat <<EOF > app/src/main/java/com/janmedia/app/MainActivity.java
+          
+          cat << 'EOF' > app/src/main/java/com/janmedia/app/MainActivity.java
           package com.janmedia.app;
+          import android.app.Activity;
           import android.os.Bundle;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
-          import androidx.appcompat.app.AppCompatActivity;
 
-          public class MainActivity extends AppCompatActivity {
+          public class MainActivity extends Activity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
@@ -85,6 +82,9 @@ jobs:
               }
           }
           EOF
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
       - name: Build APK
         run: gradle :app:assembleDebug
