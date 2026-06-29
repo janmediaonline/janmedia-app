@@ -57,7 +57,10 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <application android:label="JANMEDIA" android:theme="@android:style/Theme.NoTitleBar">
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+              
+              <application android:label="JANMEDIA" android:theme="@android:style/Theme.NoTitleBar" android:requestLegacyExternalStorage="true">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -70,23 +73,123 @@ jobs:
           
           cat << 'EOF' > app/src/main/java/com/janmedia/app/MainActivity.java
           package com.janmedia.app;
+          
           import android.app.Activity;
           import android.os.Bundle;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebResourceRequest;
+          import android.webkit.DownloadListener;
+          import android.app.DownloadManager;
+          import android.os.Environment;
+          import android.webkit.CookieManager;
+          import android.webkit.URLUtil;
+          import android.widget.Toast;
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.webkit.ValueCallback;
 
           public class MainActivity extends Activity {
+              private ValueCallback<Uri[]> mFilePathCallback;
+              private final static int FILECHOOSER_RESULTCODE = 1;
+
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   WebView webView = new WebView(this);
                   setContentView(webView);
+                  
                   WebSettings webSettings = webView.getSettings();
                   webSettings.setJavaScriptEnabled(true);
                   webSettings.setDomStorageEnabled(true);
-                  webView.setWebViewClient(new WebViewClient());
+                  webSettings.setAllowFileAccess(true);
+                  webSettings.setAllowContentAccess(true);
+
+                  // 1. Handle External Apps (UPI, WhatsApp, Intent links)
+                  webView.setWebViewClient(new WebViewClient() {
+                      @SuppressWarnings("deprecation")
+                      @Override
+                      public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                          return handleUri(url);
+                      }
+
+                      @Override
+                      public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                          return handleUri(request.getUrl().toString());
+                      }
+
+                      private boolean handleUri(String url) {
+                          if (url.startsWith("http://") || url.startsWith("https://")) {
+                              return false; // Load normal links in webview
+                          }
+                          try {
+                              Intent intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
+                              startActivity(intent);
+                              return true;
+                          } catch (Exception e) {
+                              return false;
+                          }
+                      }
+                  });
+
+                  // 2. Handle File Uploads (Gallery for Profile Photo)
+                  webView.setWebChromeClient(new WebChromeClient() {
+                      @Override
+                      public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                          if (mFilePathCallback != null) {
+                              mFilePathCallback.onReceiveValue(null);
+                          }
+                          mFilePathCallback = filePathCallback;
+                          Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                          intent.addCategory(Intent.CATEGORY_OPENABLE);
+                          intent.setType("*/*");
+                          startActivityForResult(Intent.createChooser(intent, "Select Photo"), FILECHOOSER_RESULTCODE);
+                          return true;
+                      }
+                  });
+
+                  // 3. Handle File Downloads (Saving Posters)
+                  webView.setDownloadListener(new DownloadListener() {
+                      @Override
+                      public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
+                          if(url.startsWith("data:")) {
+                              Toast.makeText(getApplicationContext(), "Please use long press on image to save.", Toast.LENGTH_LONG).show();
+                              return;
+                          }
+                          try {
+                              DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+                              request.setMimeType(mimetype);
+                              String cookies = CookieManager.getInstance().getCookie(url);
+                              request.addRequestHeader("cookie", cookies);
+                              request.addRequestHeader("User-Agent", userAgent);
+                              request.setDescription("Downloading file...");
+                              request.setTitle(URLUtil.guessFileName(url, contentDisposition, mimetype));
+                              request.allowScanningByMediaScanner();
+                              request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                              request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, URLUtil.guessFileName(url, contentDisposition, mimetype));
+                              DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                              dm.enqueue(request);
+                              Toast.makeText(getApplicationContext(), "Downloading...", Toast.LENGTH_SHORT).show();
+                          } catch (Exception e) {
+                              Toast.makeText(getApplicationContext(), "Download Failed", Toast.LENGTH_SHORT).show();
+                          }
+                      }
+                  });
+
                   webView.loadUrl("https://janmediaonline.blogspot.com/?m=1");
+              }
+
+              // Activity Result for File Chooser
+              @Override
+              protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
+                  if (requestCode == FILECHOOSER_RESULTCODE) {
+                      if (mFilePathCallback == null) return;
+                      Uri[] result = intent == null || resultCode != RESULT_OK ? null : new Uri[]{intent.getData()};
+                      mFilePathCallback.onReceiveValue(result);
+                      mFilePathCallback = null;
+                  }
               }
           }
           EOF
