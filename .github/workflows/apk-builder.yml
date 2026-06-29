@@ -22,7 +22,7 @@ jobs:
           cat << 'EOF' > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { classpath "com.android.tools.build:gradle:7.4.2" }
+              dependencies { classpath "com.android.tools.build:gradle:8.2.2" }
           }
           allprojects {
               repositories { google(); mavenCentral() }
@@ -33,11 +33,11 @@ jobs:
           plugins { id 'com.android.application' }
           android {
               namespace 'com.janmedia.app'
-              compileSdk 33
+              compileSdk 34
               defaultConfig {
                   applicationId "com.janmedia.app"
                   minSdk 21
-                  targetSdk 33
+                  targetSdk 34
                   versionCode 1
                   versionName "1.0"
               }
@@ -86,9 +86,7 @@ jobs:
           EOF
 
       - name: Build APK
-        run: |
-          gradle wrapper --gradle-version 7.5
-          ./gradlew :app:assembleDebug
+        run: gradle :app:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
