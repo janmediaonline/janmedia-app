@@ -27,7 +27,6 @@ jobs:
           cat << 'EOF' > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
-              # Plugin version ni 8.4.2 ki update chesam
               dependencies { classpath "com.android.tools.build:gradle:8.4.2" }
           }
           allprojects {
@@ -93,7 +92,6 @@ jobs:
           EOF
 
       - name: Build APK
-        # Direct ga gradle command vadesthunnam
         run: gradle :app:assembleDebug
 
       - name: Upload APK
