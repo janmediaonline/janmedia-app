@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' name='viewport'/>
+  <title>JANMEDIA - Ultimate Server BG Remover</title>
+  
+  <link href='https://fonts.googleapis.com' rel='preconnect'/>
+  <link crossorigin='anonymous' href='https://fonts.gstatic.com' rel='preconnect'/>
+  <link href='https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap' media='print' onload='this.media="all"' rel='stylesheet'/>
+  <link href='https://fonts.googleapis.com/css2?family=Sree+Krushnadevaraya&display=swap' media='print' onload='this.media="all"' rel='stylesheet'/>
+  <link href='https://fonts.googleapis.com/icon?family=Material+Icons' media='print' onload='this.media="all"' rel='stylesheet'/>
+  
+  <link href='https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css' rel='stylesheet'/>
+  <script defer='defer' src='https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js'></script>
+  <script defer='defer' src='https://checkout.razorpay.com/v1/checkout.js'></script>
+
+  <style>
+    :root { --primary-color: #FFFF00; --secondary-color: #D32F2F; --dark-bg: #0f2027; --light-bg: #f0f4f8; --text-dark: #333; }
+    
+    body { 
+      font-family: 'Poppins', sans-serif; background: var(--light-bg); margin: 0; padding: 0; padding-top: 60px; padding-bottom: 90px; color: var(--text-dark); text-transform: uppercase; 
+      -webkit-touch-callout: none; -webkit-user-select: none; -khtml-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; 
+    }
+    
+    #splash-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #ffffff; z-index: 999999; display: flex; align-items: center; justify-content: center; flex-direction: column; transition: opacity 0.5s ease; }
+    .jm-letters { font-size: 110px; font-weight: 900; display: flex; letter-spacing: -5px; line-height: 1; }
+    .letter-j { color: #002A5C; opacity: 0; transform: translateX(-30px); animation: slideRight 0.5s forwards ease-out 0.2s; }
+    .letter-m { color: #FF5E00; opacity: 0; transform: translateX(30px); animation: slideLeft 0.5s forwards ease-out 0.8s; }
+    .jm-text { font-size: 26px; font-weight: 800; color: #002A5C; margin-top: 0px; opacity: 0; letter-spacing: 1px; animation: fadeUp 0.5s forwards ease-out 1.5s; }
+    
+    @keyframes slideRight { to { opacity: 1; transform: translateX(0); } }
+    @keyframes slideLeft { to { opacity: 1; transform: translateX(0); } }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+    
+    .app-header { position: fixed; top: 0; left: 0; width: 100%; height: 60px; background: #ffffff; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; box-sizing: border-box; z-index: 1000; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    .app-header h2 { font-size: 20px; margin: 0; font-weight: 900; letter-spacing: 1px;}
+    .admin-icon { color: #002A5C; cursor: pointer; font-size: 28px; }
+    
+    .flat-auth-page { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; position: fixed; top: 0; left: 0; width: 100%; background: var(--light-bg); z-index: 500; }
+    .flat-box { width: 100%; max-width: 350px; text-align: center; padding: 20px; }
+    .flat-box h3 { color: #002A5C; font-size: 26px; margin-bottom: 20px; font-weight: 800; letter-spacing: 1px; }
+    .flat-box input, .flat-box select { width: 100%; padding: 12px 5px; margin: 10px 0; border: none; border-bottom: 2px solid #a0aec0; background: transparent; font-size: 15px; outline: none; border-radius: 0; font-weight: 600; text-transform: uppercase; transition: 0.3s; }
+    .flat-box input:focus, .flat-box select:focus { border-bottom: 2px solid var(--secondary-color); }
+    
+    /* Professional Global Buttons */
+    .btn-enabled, .btn-success, .btn-cancel, .btn-crop, .btn-logout { 
+      padding: 15px; border: none; font-size: 15px; font-weight: 800; border-radius: 10px; margin-top: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); transition: 0.3s; width: 100%; cursor: pointer; pointer-events: auto; text-transform: uppercase; letter-spacing: 1px; display: inline-block; box-sizing: border-box;
+    }
+    .btn-disabled { background: #a0aec0 !important; color: #e1e8ed !important; cursor: not-allowed !important; pointer-events: none; width: 100%; padding: 15px; border: none; border-radius: 10px; font-weight: 800; margin-top: 10px; }
+    .btn-enabled { background: linear-gradient(135deg, #002A5C, #004080) !important; color: white !important; }
+    .btn-success { background: linear-gradient(135deg, #2ecc71, #27ae60) !important; color: white !important; }
+    .btn-cancel { background: #fff5f5 !important; color: #e74c3c !important; border: 2px solid #e74c3c !important; box-shadow: none; }
+    .btn-crop { background: linear-gradient(135deg, #002A5C, #004080) !important; color: white !important; }
+    .btn-logout { background: #ffebee !important; color: #d32f2f !important; margin-top: 25px; box-shadow: none; }
+
+    .toggle-text { margin-top: 25px; font-size: 13px; font-weight: bold; cursor: pointer; color: var(--secondary-color); text-decoration: none !important; display: inline-block; }
+    
+    .container { padding: 10px; max-width: 500px; margin: auto; box-sizing: border-box; }
+    
+    .poster-grid { display: grid; grid-template-columns: 1fr; gap: 20px; padding: 10px; }
+    .poster-item { background: transparent; text-align: center; padding: 0; min-height: 300px; position: relative; }
+    .poster-item img { width: 100%; border-radius: 12px; border: 1px solid #ddd; object-fit: contain; background: #e1e8ed; transition: opacity 0.3s ease; pointer-events: none; } 
+    
+    .action-btns { display: flex; gap: 10px; margin-top: 10px; width: 100%; display: none; }
+    .action-btns.show { display: flex; }
+    .dl-btn, .share-btn { flex: 1; padding: 12px; font-size: 13px; display:flex; justify-content:center; align-items:center; gap:5px; color: #ffffff; font-weight: bold; border-radius: 8px; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.1); cursor: pointer; pointer-events: auto; letter-spacing: 0.5px;}
+    .dl-btn { background: linear-gradient(135deg, #002A5C, #004080); }
+    .share-btn { background: linear-gradient(135deg, #25D366, #128C7E); }
+    
+    .loading-shimmer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 12px; z-index: -1; }
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+
+    #wa-float { position: fixed; bottom: 120px; right: 20px; width: 55px; height: 55px; z-index: 1000; display: none; background: #25D366; border-radius: 50%; box-shadow: 0 4px 15px rgba(37,211,102,0.4); justify-content: center; align-items: center; pointer-events: auto; }
+    #wa-float img { width: 35px; height: 35px; pointer-events: none; }
+    
+    .card { background: white; padding: 25px 20px; border-radius: 16px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); width: 100%; box-sizing: border-box; margin: auto; }
+    .card h3 { text-align: center; color: #002A5C; margin-top: 0; font-size: 20px; font-weight: 700; }
+    .card input, .card select { width: 100%; padding: 15px; margin: 8px 0 15px 0; border-radius: 10px; border: 1px solid #e1e8ed; font-weight: 600; outline: none; background: #f9fbfd; box-sizing: border-box; }
+    
+    #paywall-section { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15,32,39,0.9); z-index: 100000; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; backdrop-filter: blur(5px); }
+    .paywall-card { border: 2px solid #002A5C; background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%); position: relative; padding-top: 30px; border-radius: 16px; width: 100%; max-width: 400px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+    .paywall-content { position: relative; z-index: 2; padding: 0 20px 25px 20px; }
+    .close-paywall { position: absolute; top: 10px; left: 15px; font-size: 32px; color: #888; cursor: pointer; font-weight: bold; line-height: 1; z-index: 3; transition: 0.3s; }
+    .badge { position: absolute; top: 15px; right: -30px; background: linear-gradient(135deg, #FFD700, #FDB931); color: #002A5C; padding: 5px 35px; font-size: 11px; font-weight: 900; transform: rotate(45deg); z-index: 0; box-shadow: 0 2px 10px rgba(0,0,0,0.1); letter-spacing: 1px;}
+    .plan-selector { display: flex; gap: 15px; margin: 25px 0 15px 0; }
+    .plan-card { flex: 1; padding: 15px 5px; border: 2px solid #e1e8ed; border-radius: 12px; cursor: pointer; text-align: center; background: white; transition: 0.3s; box-shadow: 0 4px 10px rgba(0,0,0,0.02);}
+    .plan-card.active { border-color: #002A5C; background: #f0f4f8; transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,42,92,0.1); }
+    .plan-card h4 { margin: 0; font-size: 15px; color: #002A5C; font-weight: 800;}
+    .plan-card p { margin: 5px 0 0 0; font-size: 13px; color: #666; font-weight: bold; }
+    .pay-btn { background: linear-gradient(135deg, #002A5C, #004080); color: #ffffff; border:none; padding:16px; width:100%; font-weight:800; font-size:15px; border-radius:10px; pointer-events: auto; letter-spacing: 1px; box-shadow: 0 6px 15px rgba(0,42,92,0.2); margin-top: 15px;}
+
+    .sub-box { background: #eef2f5; border: 1px solid #d1d9e6; border-radius: 12px; padding: 18px; margin-top: 20px; text-align: left; box-shadow: inset 0 2px 5px rgba(0,0,0,0.02);}
+    .sub-box h4 { margin: 0 0 15px 0; color: #002A5C; font-size: 16px; font-weight: 800; text-align: center; border-bottom: 1px dashed #cbd5e1; padding-bottom: 10px;}
+    .sub-box p { margin: 8px 0; font-size: 13px; font-weight: bold; color: #555; display: flex; justify-content: space-between;}
+    
+    .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: white; z-index: 1000; box-shadow: 0 -4px 25px rgba(0,0,0,0.08); padding: 8px 0; border-top-left-radius: 20px; border-top-right-radius: 20px; display: flex; overflow-x: auto; white-space: nowrap; }
+    .nav-item { flex: 1; min-width: 60px; text-align: center; padding: 10px 0; font-size: 10px; color: #a0aec0; cursor: pointer; display: flex; flex-direction: column; align-items: center; font-weight: 700; transition: 0.3s; pointer-events: auto; }
+    .nav-item i { font-size: 24px; margin-bottom: 5px; }
+    .nav-item.active { color: #002A5C; }
+    .nav-item.active i { color: var(--secondary-color); text-shadow: 0 2px 5px rgba(211,47,47,0.3); transform: translateY(-4px); }
+    
+    .profile-img { width: 140px; height: 140px; border-radius: 16px; border: 4px solid #002A5C; object-fit: cover; display: block; margin: 0; background-color: #f9fbfd; pointer-events: none; box-shadow: 0 8px 20px rgba(0,0,0,0.1);}
+    .upload-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #e1e8ed; color: #002A5C; font-weight: 800; font-size: 13px; padding: 12px 20px; border-radius: 30px; cursor: pointer; transition: 0.3s; pointer-events: auto;}
+    
+    /* Fixed Spinner Animation */
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    #spinner-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(240,244,248,0.95); z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .spinner { border: 5px solid rgba(211,47,47,0.1); width: 60px; height: 60px; border-radius: 50%; border-left-color: var(--secondary-color); animation: spin 1s linear infinite; margin-bottom: 20px; }
+    #spinner-text { font-size: 14px; font-weight: 700; color: var(--secondary-color); text-align: center; padding: 0 20px; letter-spacing: 1px; }
+    
+    #toast { visibility: hidden; min-width: 250px; background-color: #002A5C; color: #fff; text-align: center; border-radius: 12px; padding: 16px; position: fixed; z-index: 100000; left: 50%; bottom: 80px; transform: translateX(-50%); font-size: 14px; font-weight: 700; box-shadow: 0 5px 15px rgba(0,0,0,0.2);}
+    #toast.show { visibility: visible; animation: fadein 0.4s, fadeout 0.4s 4.5s; }
+    @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 80px; opacity: 1;} }
+    @keyframes fadeout { from {bottom: 80px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+    
+    #crop-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15,32,39,0.95); z-index: 100000; padding: 20px; box-sizing: border-box; overflow-y: auto; }
+    .crop-container { width: 100%; max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 16px; box-sizing: border-box; }
+    .crop-img-wrapper { width: 100%; max-height: 50vh; overflow: hidden; background: #e1e8ed; display:flex; justify-content:center; align-items:center; border-radius:12px;}
+    #image-to-crop { max-width: 100%; max-height: 50vh; display: block; pointer-events: none;}
+    .crop-btns { display: flex; gap: 10px; margin-top: 15px; }
+    
+    .otp-box-ui { background: #eef2f5; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px dashed #002A5C; }
+    .locked { background: #eef2f5 !important; color: #8898aa; pointer-events: none; }
+  </style>
+</head>
+
+<body oncontextmenu='return false;'>
+
+  <div id='splash-screen'>
+    <div class='jm-letters'>
+        <span class='letter-j'>J</span><span class='letter-m'>M</span>
+    </div>
+    <div class='jm-text'>JANMEDIA</div>
+  </div>
+
+  <header class='app-header' id='main-header'>
+    <h2 style='letter-spacing: 1px; font-weight:900;'><span style='color:#002A5C;'>JAN</span><span style='color:#FF5E00;'>MEDIA</span></h2>
+    <i class='material-icons admin-icon' onclick='openAdminLogin()'>admin_panel_settings</i>
+  </header>
+
+  <div id='spinner-overlay' style='display: none;'><div class='spinner'></div><div id='spinner-text'>PLEASE WAIT...</div></div>
+  <div id='toast'>MESSAGE HERE</div>
+
+  <div id='crop-modal'>
+    <div class='crop-container'>
+      <h3 style='text-align:center; color: #0f2027; margin-top:0; margin-bottom:15px; font-weight:800;'>CROP PHOTO</h3>
+      <div class='crop-img-wrapper'><img id='image-to-crop' src=''/></div>
+      <div class='crop-btns'>
+        <button class='btn-cancel' onclick='cancelCrop()'>CANCEL</button>
+        <button class='btn-crop' onclick='uploadCroppedImage()'>CROP &amp; UPLOAD</button>
+      </div>
+    </div>
+  </div>
+
+  <div id='paywall-section' style='display: none;'>
+    <div class='card paywall-card'>
+      <div class='badge'>PREMIUM</div>
+      <div class='paywall-content'>
+          <span class='close-paywall' onclick='closePaywall()'>&times;</span>
+          <h3 id='paywall-title' style='margin:0; text-align:center; font-size:22px; margin-bottom: 5px;'>CHOOSE PLAN</h3>
+          <p style='text-align:center; font-size:12px; font-weight:700; color:#666; margin-top: 0;'>Unlock Full Quality Downloads</p>
+          
+          <div class='plan-selector'>
+             <div class='plan-card active' id='card-monthly' onclick='selectPlan("monthly")'>
+                <h4>MONTHLY</h4>
+                <p>&#8377;149 / month</p>
+             </div>
+             <div class='plan-card' id='card-yearly' onclick='selectPlan("yearly")'>
+                <h4>YEARLY</h4>
+                <p>&#8377;1299 / year</p>
+             </div>
+          </div>
+
+          <button class='pay-btn btn-enabled' onclick='initiatePayment()'>PROCEED TO PAYMENT</button>
+      </div>
+    </div>
+  </div>
+
+  <div id='auth-section' style='display:none;'>
+    
+    <div class='flat-auth-page' id='view-login'>
+      <div class='flat-box'>
+        <h3>LOGIN</h3>
+        <input id='login-phone' oninput='checkLoginInput()' placeholder='MOBILE NUMBER' type='number'/>
+        <button class='btn-enabled' onclick='handleDirectLogin()'>LOGIN SECURELY</button>
+        <div class='toggle-text' onclick='showRegister()'>CREATE AN ACCOUNT</div>
+      </div>
+    </div>
+
+    <div class='flat-auth-page' id='view-register' style='display: none;'>
+      <div class='flat-box' style='overflow-y:auto; max-height:80vh;'>
+        <h3 style='color: var(--secondary-color);'>REGISTER</h3>
+        
+        <input id='reg-phone' oninput='checkRegInput()' placeholder='MOBILE NUMBER' type='number'/>
+        <button class='btn-enabled' id='btn-reg-send' onclick='sendWhatsAppOTP("register")'>SEND OTP</button>
+        
+        <div class='otp-box-ui' id='reg-otp-sec' style='display:none;'>
+           <input id='reg-otp' placeholder='ENTER 6-DIGIT OTP' style='border-bottom: 2px solid #002A5C; background: #fff;' type='number'/>
+           <button class='btn-success' id='btn-reg-verify' onclick='verifyWhatsAppOTP("register")'>VERIFY PHONE</button>
+        </div>
+
+        <div id='reg-details-sec' style='margin-top: 15px;'>
+            <input id='reg-name' placeholder='FULL NAME' type='text'/>
+            <input id='reg-email' placeholder='EMAIL (GMAIL)' type='email'/>
+            <input id='reg-pin' oninput='handleRegPin(this.value)' placeholder='PIN CODE' type='number'/>
+            <input class='locked' id='reg-state' placeholder='STATE' readonly='readonly' type='text'/>
+            <input class='locked' id='reg-dist' placeholder='DISTRICT' readonly='readonly' type='text'/>
+            <input class='locked' id='reg-mandal' placeholder='MANDAL' readonly='readonly' type='text'/>
+            <select id='reg-village'><option value=''>SELECT VILLAGE</option></select>
+            
+            <button class='btn-disabled' disabled='disabled' id='btn-reg-submit' onclick='handleRegister()'>REGISTER (GET 7 DAYS FREE)</button>
+        </div>
+        
+        <div class='toggle-text' onclick='showLogin()'>ALREADY HAVE AN ACCOUNT? LOGIN</div>
+      </div>
+    </div>
+  </div>
+
+  <div id='main-app-section' style='display: none;'>
+    <a href='https://wa.me/919999999999' id='wa-float' target='_blank'><img alt='WhatsApp' loading='lazy' src='https://upload.wikimedia.org/wikipedia/commons/5/5e/WhatsApp_icon.png'/></a>
+
+    <div class='container'>
+
+      <div class='card' id='view-profile' style='display: none;'>
+        <h3 style='margin-bottom: 25px;'>PROFILE SETTINGS</h3>
+        
+        <div style='display:flex; justify-content:center; align-items:center; flex-direction:column; gap:15px; margin-bottom:20px;'>
+            <img class='profile-img' id='avatar-preview' loading='lazy' src='https://via.placeholder.com/150?text=UPLOAD+PHOTO'/>
+            <div class='upload-btn' onclick='document.getElementById("photo-input").click()'><i class='material-icons'>add_a_photo</i> UPDATE PHOTO</div>
+        </div>
+        <input accept='image/*' id='photo-input' onchange='handleFileSelect(this)' style='display:none;' type='file'/>
+        
+        <input id='p-name' placeholder='ENTER YOUR NAME' type='text'/>
+        <input id='p-pos' placeholder='E.G., MANDAL PRESIDENT' type='text'/>
+        
+        <label style='font-size:12px; font-weight:bold; color:#666; margin-left:5px;'>POSTER FONT (భాష)</label>
+        <select id='p-lang' style='margin-bottom: 20px;'>
+          <option value='telugu'>TELUGU (తెలుగు ఫాంట్)</option>
+          <option value='english'>ENGLISH (ఇంగ్లీష్ ఫాంట్)</option>
+        </select>
+        
+        <button class='btn-enabled' onclick='saveProfile()'>SAVE PROFILE</button>
+        
+        <div class='sub-box' id='manage-sub-box' style='display:block;'>
+           <h4>MANAGE SUBSCRIPTION</h4>
+           <p>PLAN: <span id='disp-plan-name' style='color:var(--secondary-color);'>FREE TRIAL</span></p>
+           <p>STATUS: <span id='disp-status' style='color:#2ecc71;'>ACTIVE</span></p>
+           <p>EXPIRY DATE: <span id='disp-expiry-date' style='color:#002A5C;'></span></p>
+           <p>DAYS LEFT: <span id='disp-days-left' style='color:#e74c3c;'></span></p>
+           
+           <div id='sub-action-btns' style='display:flex; gap:10px; margin-top:20px;'>
+               <button onclick='openPaywall()' style='background: #f0f4f8; color: #002A5C; border: 2px solid #002A5C; font-size:13px; padding: 12px; border-radius: 8px;'>UPGRADE / RENEW</button>
+               <button id='btn-cancel-sub' onclick='cancelSubscription()' style='background: #fff5f5; color: #e74c3c; border: 2px solid #e74c3c; font-size:13px; padding: 12px; border-radius: 8px; display:none;'>CANCEL</button>
+           </div>
+        </div>
+        
+        <button class='btn-logout' onclick='logoutUser()'>LOGOUT ACCOUNT</button>
+      </div>
+
+      <div id='view-home' style='display: none;'><div class='poster-grid' id='poster-container'></div></div>
+    </div>
+
+    <div class='bottom-nav'>
+      <div class='nav-item active' id='tab-Home' onclick='switchTab("Home")'><i class='material-icons'>home</i>HOME</div>
+      <div class='nav-item' id='tab-Festival' onclick='switchTab("Festival")'><i class='material-icons'>festival</i>FESTIVAL</div>
+      <div class='nav-item' id='tab-Birthday' onclick='switchTab("Birthday")'><i class='material-icons'>cake</i>BIRTHDAY</div>
+      <div class='nav-item' id='tab-Schemes' onclick='switchTab("Schemes")'><i class='material-icons'>handshake</i>SCHEMES</div>
+      <div class='nav-item' id='tab-Profile' onclick='switchTab("Profile")'><i class='material-icons'>person</i>PROFILE</div>
+    </div>
+  </div>
+
+  <div id='admin-section' style='display: none;'>
+    <div class='flat-auth-page' id='view-admin-login'>
+      <div class='flat-box'>
+        <div onclick='closeAdmin()' style='color:#8898aa; font-weight:700; cursor:pointer; margin-bottom:20px;'><i class='material-icons' style='vertical-align:middle;'>arrow_back</i> BACK</div>
+        <h3>ADMIN LOGIN</h3>
+        <input id='admin-id' placeholder='ADMIN ID' type='text'/>
+        <input id='admin-pass' placeholder='PASSWORD' type='password'/>
+        <button class='btn-enabled' onclick='verifyAdmin()'>UNLOCK</button>
+      </div>
+    </div>
+    <div class='flat-auth-page' id='view-admin-dash' style='display: none;'>
+      <div class='card'>
+        <div onclick='closeAdmin()' style='color:#8898aa; font-weight:700; cursor:pointer; margin-bottom:20px;'><i class='material-icons' style='vertical-align:middle;'>arrow_back</i> BACK</div>
+        <h3>UPLOAD TEMPLATE</h3>
+        
+        <select id='adm-cat'>
+          <option value='FESTIVAL'>FESTIVAL</option>
+          <option value='BIRTHDAY'>BIRTHDAY</option>
+          <option value='SCHEMES'>SCHEMES</option>
+        </select>
+        
+        <input accept='image/*' id='adm-file' multiple='multiple' style='padding:15px;' type='file'/>
+        <button class='btn-enabled' onclick='adminUpload()'>UPLOAD SECURELY</button>
+      </div>
+    </div>
+  </div>
+
+  <script type='text/javascript'>
+    
+    // 🔥 మీ Apps Script URL ఇక్కడ అప్డేట్ చేయండి 🔥
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzLkrAIvYp5cUDDQvKwQ-h2ZwYVRlLk5V_FNlhmFVhZNRedEbUTBCc5Fsvigz0eKmD6/exec"; 
+    
+    const CLOUD_NAME = "dif1nibvq"; 
+    const UPLOAD_PRESET = "janmedia"; 
+    const RAZORPAY_KEY_ID = "rzp_live_T3uzq1npYSBFNB"; 
+    const PLAN_ID_MONTHLY = "plan_T3v8I3AaLojBWj"; 
+    const PLAN_ID_YEARLY = "plan_T3v8I3AaLojBWj"; 
+    
+    let user = null; let allPosters = []; let activeTab = 'Home'; let cropper; 
+    let currentSelectedPlan = 'monthly';
+    let isPhoneVerified = false; 
+    let currentGeneratedOTP = "";
+
+    function saveUserLocal() { if(user) localStorage.setItem('jm_user', JSON.stringify(user)); }
+
+    window.onload = () => { 
+      setTimeout(() => { 
+        document.getElementById('splash-screen').style.opacity = '0'; 
+        setTimeout(()=>{ 
+          document.getElementById('splash-screen').style.display = 'none'; 
+          
+          let localU = localStorage.getItem('jm_user');
+          if(localU) {
+             user = JSON.parse(localU);
+             document.getElementById('p-name').value = user.name || ""; 
+             document.getElementById('p-pos').value = user.position || ""; 
+             if(user.imageUrl) document.getElementById('avatar-preview').src = user.imageUrl;
+             if(localStorage.getItem('poster_lang')) document.getElementById('p-lang').value = localStorage.getItem('poster_lang');
+             checkSubscriptionUI();
+             
+             document.getElementById('auth-section').style.display = 'none'; 
+             document.getElementById('main-app-section').style.display = 'block'; 
+             document.getElementById('wa-float').style.display = 'flex';
+             switchTab('Home'); 
+             loadPosters();
+          } else {
+             document.getElementById('auth-section').style.display = 'block'; 
+          }
+        }, 500); 
+      }, 2000); 
+    };
+
+    function showMsg(msg) { let t = document.getElementById("toast"); t.innerText = msg; t.className = "show"; setTimeout(()=>{ t.className = t.className.replace("show", ""); }, 4500); }
+    function showSpinner(text) { document.getElementById('spinner-text').innerText = text; document.getElementById('spinner-overlay').style.display = 'flex'; }
+    function hideSpinner() { document.getElementById('spinner-overlay').style.display = 'none'; }
+
+    function selectPlan(plan) { currentSelectedPlan = plan; document.getElementById('card-monthly').classList.remove('active'); document.getElementById('card-yearly').classList.remove('active'); document.getElementById('card-' + plan).classList.add('active'); }
+
+    async function apiCall(data) {
+      try {
+        let res = await fetch(GAS_API_URL, { method: 'POST', body: JSON.stringify(data) });
+        let text = await res.text();
+        try {
+            let result = JSON.parse(text);
+            if(result.status === "error") return {error: true, message: result.message}; 
+            return result.data || result;
+        } catch(parseError) {
+            return {error: true, message: "SCRIPT PERMISSION ERROR!"};
+        }
+      } catch(e) { return {error: true, message: "NETWORK ERROR."}; }
+    }
+
+    function checkLoginInput() { let ph = document.getElementById('login-phone').value; if(ph.length > 10) document.getElementById('login-phone').value = ph.slice(0, 10); }
+    function checkRegInput() { let ph = document.getElementById('reg-phone').value; if(ph.length > 10) document.getElementById('reg-phone').value = ph.slice(0, 10); }
+
+    // 🔥 Direct Login Mode (No OTP) 🔥
+    async function handleDirectLogin() {
+      let ph = document.getElementById('login-phone').value;
+      if(!ph || ph.length !== 10) return showMsg("ENTER 10 DIGIT MOBILE NUMBER");
+      
+      showSpinner("LOGGING IN...");
+      let resUser = await apiCall({action: 'login', phone: ph});
+      hideSpinner();
+      
+      if(resUser && !resUser.error) {
+          user = resUser; saveUserLocal(); showMsg("WELCOME BACK!");
+          document.getElementById('p-name').value = user.name || ""; 
+          document.getElementById('p-pos').value = user.position || ""; 
+          if(user.imageUrl) document.getElementById('avatar-preview').src = user.imageUrl;
+          checkSubscriptionUI();
+          document.getElementById('auth-section').style.display = 'none'; 
+          document.getElementById('main-app-section').style.display = 'block'; 
+          document.getElementById('wa-float').style.display = 'flex';
+          switchTab('Home'); 
+          loadPosters();
+      } else {
+          showMsg("ACCOUNT NOT FOUND. PLEASE REGISTER.");
+          document.getElementById('reg-phone').value = ph; // auto fill in register
+          showRegister();
+      }
+    }
+
+    // 🔥 Registration Only OTP 🔥
+    async function sendWhatsAppOTP(type) {
+      let ph = document.getElementById('reg-phone').value;
+      if(!ph || ph.length !== 10) return showMsg("ENTER 10 DIGIT MOBILE NUMBER");
+      currentGeneratedOTP = Math.floor(100000 + Math.random() * 900000).toString();
+      showSpinner("SENDING OTP VIA WHATSAPP...");
+      
+      let res = await apiCall({action: 'sendWhatsAppOTP', phone: ph, otp: currentGeneratedOTP});
+      hideSpinner();
+      
+      if(res && !res.error) {
+          showMsg("OTP SENT TO YOUR WHATSAPP!");
+          document.getElementById('reg-otp-sec').style.display = 'block';
+          document.getElementById('btn-reg-send').style.display = 'none';
+      } else {
+          showMsg("FAILED TO SEND OTP: " + (res.message || "SERVER ERROR"));
+      }
+    }
+
+    async function verifyWhatsAppOTP(type) {
+      let enteredOtp = document.getElementById('reg-otp').value;
+      if(!enteredOtp || enteredOtp !== currentGeneratedOTP) return showMsg("INVALID OTP! PLEASE TRY AGAIN.");
+      
+      isPhoneVerified = true;
+      showMsg("PHONE VERIFIED SUCCESSFULLY!");
+      let vBtn = document.getElementById('btn-reg-verify');
+      vBtn.innerText = "VERIFIED ✔";
+      vBtn.className = "btn-success";
+      vBtn.disabled = true;
+      
+      let sBtn = document.getElementById('btn-reg-submit');
+      sBtn.classList.remove('btn-disabled');
+      sBtn.classList.add('btn-enabled');
+      sBtn.removeAttribute('disabled');
+    }
+
+    async function handleRegister() {
+      if(!isPhoneVerified) return showMsg("PLEASE VERIFY OTP FIRST");
+      let u = { name: document.getElementById('reg-name').value, phone: document.getElementById('reg-phone').value, email: document.getElementById('reg-email').value, pincode: document.getElementById('reg-pin').value, state: document.getElementById('reg-state').value, district: document.getElementById('reg-dist').value, mandalam: document.getElementById('reg-mandal').value, village: document.getElementById('reg-village').value };
+      if(!u.name || !u.email || !u.village) return showMsg("FILL ALL DETAILS.");
+      showSpinner("CREATING FREE TRIAL ACCOUNT..."); 
+      let res = await apiCall({action: 'register', user: u}); 
+      hideSpinner();
+      if(res && !res.error) { showMsg("REGISTRATION SUCCESSFUL! PLEASE LOGIN."); showLogin(); } else showMsg("REGISTRATION FAILED.");
+    }
+
+    function showRegister() { document.getElementById('view-login').style.display = 'none'; document.getElementById('view-register').style.display = 'flex'; document.getElementById('btn-reg-send').style.display = 'block'; document.getElementById('reg-otp-sec').style.display = 'none'; isPhoneVerified = false; }
+    function showLogin() { document.getElementById('view-register').style.display = 'none'; document.getElementById('view-login').style.display = 'flex'; }
+
+    async function handleRegPin(pin) {
+      if(pin.length !== 6) return;
+      try {
+        let res = await fetch("https://api.postalpincode.in/pincode/" + pin); let data = await res.json();
+        if(data[0].Status === "Success") {
+          let po = data[0].PostOffice; document.getElementById('reg-state').value = po[0].State.toUpperCase(); document.getElementById('reg-dist').value = po[0].District.toUpperCase(); document.getElementById('reg-mandal').value = po[0].Block.toUpperCase();
+          let vSel = document.getElementById('reg-village'); vSel.innerHTML = '<option value="">SELECT VILLAGE</option>';
+          po.forEach(p => { vSel.innerHTML += "<option value='" + p.Name.toUpperCase() + "'>" + p.Name.toUpperCase() + "</option>"; });
+        }
+      } catch(e) {}
+    }
+
+    function logoutUser() {
+      localStorage.removeItem('jm_user'); user = null;
+      document.getElementById('main-app-section').style.display = 'none';
+      document.getElementById('auth-section').style.display = 'block';
+      showLogin(); showMsg("LOGGED OUT SUCCESSFULLY.");
+    }
+
+    function checkSubscriptionUI() {
+        if(!user) return;
+        let st = user.sub_status;
+        let pNameEl = document.getElementById('disp-plan-name');
+        let statEl = document.getElementById('disp-status');
+        let expEl = document.getElementById('disp-expiry-date');
+        let daysEl = document.getElementById('disp-days-left');
+        let cancelBtn = document.getElementById('btn-cancel-sub');
+        
+        let expiryDateStr = user.expiry_date || "NA"; let daysLeftStr = "NA";
+        if (expiryDateStr !== "NA") {
+            let exp = new Date(expiryDateStr); let today = new Date();
+            let diffTime = exp.getTime() - today.getTime();
+            if (diffTime > 0) { daysLeftStr = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + " DAYS"; } else { daysLeftStr = "EXPIRED"; }
+            let dd = String(exp.getDate()).padStart(2, '0'); let mm = String(exp.getMonth() + 1).padStart(2, '0'); let yyyy = exp.getFullYear();
+            expiryDateStr = dd + "/" + mm + "/" + yyyy;
+        }
+        expEl.innerText = expiryDateStr; daysEl.innerText = daysLeftStr;
+        if(st === "FREE_TRIAL") { pNameEl.innerText = "FREE TRIAL (7 DAYS)"; statEl.innerText = "ACTIVE"; statEl.style.color = "#2ecc71"; cancelBtn.style.display = 'none'; } 
+        else if (st === "ACTIVE") { pNameEl.innerText = user.plan_name || "PREMIUM PLAN"; statEl.innerText = "ACTIVE"; statEl.style.color = "#2ecc71"; cancelBtn.style.display = 'block'; } 
+        else { pNameEl.innerText = "NO PLAN"; statEl.innerText = "EXPIRED"; statEl.style.color = "#e74c3c"; cancelBtn.style.display = 'none'; }
+    }
+
+    function openPaywall() { document.getElementById('paywall-section').style.display = 'flex'; }
+    function closePaywall() { document.getElementById('paywall-section').style.display = 'none'; }
+    function handleDownloadClick(url) { if(user && (user.sub_status === "ACTIVE" || user.sub_status === "FREE_TRIAL")) downloadImage(url); else openPaywall(); }
+    function handleShareClick(url) { if(user && (user.sub_status === "ACTIVE" || user.sub_status === "FREE_TRIAL")) shareImageToWhatsApp(url); else openPaywall(); }
+
+    function downloadImage(dataUrl) {
+        showMsg("DOWNLOAD STARTED!");
+        let a = document.createElement('a'); a.href = dataUrl; a.download = "JANMEDIA_Poster.webp";
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+
+    function dataURItoBlob(dataURI) {
+        var byteString = atob(dataURI.split(',')[1]); var mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+        var ab = new ArrayBuffer(byteString.length); var ia = new Uint8Array(ab);
+        for (var i = 0; i < byteString.length; i++) { ia[i] = byteString.charCodeAt(i); }
+        return new Blob([ab], {type: mimeString});
+    }
+
+    async function shareImageToWhatsApp(dataUrl) {
+        try {
+            const blob = dataURItoBlob(dataUrl); const file = new File([blob], "JANMEDIA_Poster.webp", { type: "image/webp" });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({ title: 'JANMEDIA Poster', text: 'Check out this awesome poster!', files: [file] });
+            } else { showMsg("DIRECT SHARING NOT SUPPORTED ON THIS BROWSER."); }
+        } catch (error) { if (error.name !== 'AbortError') showMsg("SHARE FAILED."); }
+    }
+
+    async function initiatePayment() {
+        closePaywall(); showSpinner("REDIRECTING TO SECURE PAYMENT..."); 
+        let pId = currentSelectedPlan === 'monthly' ? PLAN_ID_MONTHLY : PLAN_ID_YEARLY;
+        let count = currentSelectedPlan === 'monthly' ? 12 : 5; 
+        let subRes = await apiCall({action: 'createSubscription', plan_id: pId, total_count: count});
+        hideSpinner();
+
+        if (subRes && !subRes.error && subRes.subscription_id) {
+            var options = {
+                "key": RAZORPAY_KEY_ID, "subscription_id": subRes.subscription_id, "name": "JANMEDIA ONLINE", "description": "Premium Subscription",
+                "handler": async function (response) {
+                    showSpinner("VERIFYING PAYMENT...");
+                    let verifyRes = await apiCall({ action: 'verifyPayment', phone: user.phone, razorpay_payment_id: response.razorpay_payment_id, razorpay_subscription_id: response.razorpay_subscription_id, razorpay_signature: response.razorpay_signature });
+                    hideSpinner();
+                    if(verifyRes && !verifyRes.error) {
+                        showMsg("PLAN ACTIVATED SUCCESSFULLY!"); 
+                        user.sub_status = "ACTIVE"; user.sub_id = response.razorpay_subscription_id; 
+                        let updatedUser = await apiCall({action: 'login', phone: user.phone});
+                        if(updatedUser && !updatedUser.error) { user.expiry_date = updatedUser.expiry_date; user.plan_name = updatedUser.plan_name; }
+                        saveUserLocal(); checkSubscriptionUI(); 
+                    } else { showMsg("VERIFICATION FAILED: " + verifyRes.message); openPaywall(); }
+                },
+                "prefill": { "name": user.name || "Customer", "contact": user.phone, "email": (user.email && user.email.includes("@")) ? user.email : "support@janmedia.com" }, 
+                "theme": { "color": "#002A5C" }
+            };
+            var rzp1 = new Razorpay(options); 
+            rzp1.on('payment.failed', function (response){ showMsg("PAYMENT FAILED OR CANCELLED."); openPaywall(); }); 
+            rzp1.open();
+        } else { showMsg("PAYMENT ERROR. CHECK ALERT."); alert("Razorpay Error: \n" + (subRes ? subRes.message : "Unknown Error")); }
+    }
+
+    async function uploadToCloudinary(base64Image) {
+        const formData = new FormData(); formData.append('file', base64Image); formData.append('upload_preset', UPLOAD_PRESET);
+        try {
+            let res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
+            let data = await res.json();
+            if(data.error) { throw new Error(data.error.message); }
+            if(!data.secure_url) throw new Error("URL రాలేదు");
+            return data.secure_url;
+        } catch (error) { console.error("Upload Error:", error); alert("Cloudinary Failed: " + error.message); throw error; }
+    }
+
+    async function handleFileSelect(input) {
+      if (input.files && input.files[0]) {
+        let file = input.files[0]; showSpinner("REMOVING BACKGROUND...");
+        try {
+            let formData = new FormData(); formData.append("file", file);
+            let response = await fetch("https://janmedia-janmedia-bgremove-api.hf.space/remove-bg", { method: "POST", body: formData });
+            if (!response.ok) throw new Error("Server error: " + response.status);
+            let blob = await response.blob(); let reader = new FileReader(); reader.readAsDataURL(blob);
+            reader.onloadend = function() {
+                document.getElementById('image-to-crop').src = reader.result; document.getElementById('crop-modal').style.display = 'block';
+                if (cropper) cropper.destroy(); 
+                cropper = new Cropper(document.getElementById('image-to-crop'), { aspectRatio: 1, viewMode: 1, background: false });
+                hideSpinner(); showMsg("BACKGROUND REMOVED! ADJUST PHOTO.");
+            }
+        } catch(err) {
+            hideSpinner(); showMsg("ERROR. CROPPING ORIGINAL PHOTO.");
+            let fallbackReader = new FileReader();
+            fallbackReader.onload = function (e) {
+              document.getElementById('image-to-crop').src = e.target.result; document.getElementById('crop-modal').style.display = 'block';
+              if (cropper) cropper.destroy(); 
+              cropper = new Cropper(document.getElementById('image-to-crop'), { aspectRatio: 1, viewMode: 1, background: false });
+            }; fallbackReader.readAsDataURL(file);
+        } input.value = "";
+      }
+    }
+
+    function cancelCrop() { document.getElementById('crop-modal').style.display = 'none'; if (cropper) cropper.destroy(); document.getElementById('photo-input').value = ""; }
+
+    async function uploadCroppedImage() {
+      if (!cropper) return; document.getElementById('crop-modal').style.display = 'none'; showSpinner("UPLOADING TO CLOUDINARY...");
+      let canvas = cropper.getCroppedCanvas({ width: 800, height: 800, fillColor: 'transparent' });
+      let base64Image = canvas.toDataURL("image/png");
+      try {
+        let cloudUrl = await uploadToCloudinary(base64Image);
+        showSpinner("SAVING PROFILE...");
+        let res = await apiCall({ action: 'saveProfileImage', imageUrl: cloudUrl, phone: user.phone });
+        hideSpinner();
+        if(res && !res.error && res.imageUrl) { user.imageUrl = res.imageUrl; document.getElementById('avatar-preview').src = user.imageUrl; saveUserLocal(); showMsg("PHOTO UPDATED SUCCESSFULLY!"); } 
+        else { showMsg("DATABASE ERROR. TRY AGAIN."); }
+      } catch(e) { hideSpinner(); }
+      if (cropper) cropper.destroy(); document.getElementById('photo-input').value = "";
+    }
+
+    async function saveProfile() {
+      user.name = document.getElementById('p-name').value; user.position = document.getElementById('p-pos').value; 
+      localStorage.setItem('poster_lang', document.getElementById('p-lang').value);
+      showSpinner("SAVING PROFILE..."); await apiCall({action: 'saveProfile', user: user}); saveUserLocal(); hideSpinner(); showMsg("PROFILE SAVED!"); switchTab('Home');
+    }
+
+    function generateCanvasDataUrl(bgUrl) {
+      return new Promise((resolve) => {
+        let isResolved = false; const safeResolve = (val) => { if(!isResolved) { isResolved = true; resolve(val); } }; setTimeout(() => safeResolve(bgUrl), 8000); 
+        let canvas = document.createElement('canvas'); let ctx = canvas.getContext('2d');
+        let bg = new Image(); bg.crossOrigin = "anonymous"; bg.src = bgUrl;
+        bg.onload = () => {
+          const scale = 1.5; let footerH = 250; canvas.width = 1080 * scale; canvas.height = (1080 + footerH) * scale; ctx.scale(scale, scale);
+          ctx.drawImage(bg, 0, 0, 1080, 1080); 
+          if(!user || !user.imageUrl || !user.name) { safeResolve(canvas.toDataURL("image/webp", 0.8)); return; }
+          ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 1080, 1080, footerH);
+          ctx.fillStyle = "#002A5C"; ctx.fillRect(0, 1080, 1080, 10); 
+          let fontName = (localStorage.getItem('poster_lang') || 'telugu') === 'english' ? "'Poppins', sans-serif" : "'Sree Krushnadevaraya', serif";
+          let uImg = new Image(); uImg.crossOrigin = "anonymous"; uImg.src = user.imageUrl;
+          uImg.onload = () => {
+            let uH = footerH + 60; let uW = (uImg.width / uImg.height) * uH;
+            ctx.drawImage(uImg, 1080 - uW - 30, 1080 - 60, uW, uH); 
+            let textStartX = 40; 
+            ctx.fillStyle = "#0F2027"; ctx.font = "bold 80px " + fontName; ctx.textAlign = "left"; 
+            ctx.fillText(user.name, textStartX, 1080 + 115);
+            ctx.fillStyle = "#D32F2F"; ctx.font = "bold 45px " + fontName; 
+            ctx.fillText(user.position || "", textStartX, 1080 + 195);
+            safeResolve(canvas.toDataURL("image/webp", 0.85)); 
+          }; uImg.onerror = () => safeResolve(bgUrl);
+        }; bg.onerror = () => safeResolve(""); 
+      });
+    }
+
+    async function loadPosters() { 
+        showSpinner("FETCHING POSTERS..."); 
+        let data = await apiCall({action: 'getTemplates'}); 
+        if(data && !data.error) allPosters = data; 
+        await renderGrid(); 
+    }
+
+    async function renderGrid() {
+      let cont = document.getElementById('poster-container'); cont.innerHTML = "";
+      let filtered = (activeTab === 'Home') ? allPosters : allPosters.filter(p => p.category && p.category.trim().toUpperCase() === activeTab.trim().toUpperCase());
+      if(filtered.length === 0) { cont.innerHTML = "<p style='text-align:center; color:#8898aa; font-weight:700; margin-top:50px;'>NO POSTERS FOUND.</p>"; hideSpinner(); return; }
+      
+      filtered.forEach((p, i) => {
+        let div = document.createElement('div'); div.className = 'poster-item';
+        let highResUrl = p.imageUrl;
+        let lowResUrl = highResUrl.replace('/upload/', '/upload/w_800,q_auto,f_auto/');
+
+        div.innerHTML = `
+          <div class="loading-shimmer"></div>
+          <img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" data-bg="${lowResUrl}" data-highres="${highResUrl}" id="lazy-img-${i}" class="lazy-trigger" style="opacity:0;"/>
+          <div class="action-btns" id="action-btns-${i}">
+             <button class="dl-btn" id="dl-btn-${i}"><i class="material-icons">download</i> DOWNLOAD</button>
+             <button class="share-btn" id="share-btn-${i}"><i class="material-icons">share</i> SHARE</button>
+          </div>
+        `; cont.appendChild(div);
+      }); hideSpinner();
+
+      let observer = new IntersectionObserver((entries, obs) => {
+        entries.forEach(async entry => {
+          if (entry.isIntersecting) {
+            let img = entry.target; let i = img.id.split('-')[2]; 
+            let lowResUrl = img.getAttribute('data-bg'); let highResUrl = img.getAttribute('data-highres');
+            obs.unobserve(img); 
+            let feedUrl = await generateCanvasDataUrl(lowResUrl);
+            img.src = feedUrl; img.style.opacity = "1";
+            document.getElementById(`action-btns-${i}`).classList.add('show');
+            
+            document.getElementById(`dl-btn-${i}`).onclick = async () => { showSpinner("PREPARING HD POSTER..."); let hdUrl = await generateCanvasDataUrl(highResUrl); hideSpinner(); handleDownloadClick(hdUrl); };
+            document.getElementById(`share-btn-${i}`).onclick = async () => { showSpinner("PREPARING HD POSTER..."); let hdUrl = await generateCanvasDataUrl(highResUrl); hideSpinner(); handleShareClick(hdUrl); };
+            img.previousSibling.style.display = "none"; 
+          }
+        });
+      }, { rootMargin: "200px 0px" }); 
+      document.querySelectorAll('.lazy-trigger').forEach(el => observer.observe(el));
+    }
+
+    function openAdminLogin() { document.getElementById('auth-section').style.display = 'none'; document.getElementById('main-app-section').style.display = 'none'; document.getElementById('paywall-section').style.display = 'none'; document.getElementById('admin-section').style.display = 'block'; document.getElementById('view-admin-dash').style.display = 'none'; document.getElementById('view-admin-login').style.display = 'flex'; }
+    async function verifyAdmin() { 
+      showSpinner("VERIFYING..."); let res = await apiCall({action: 'adminLogin', adminId: document.getElementById('admin-id').value, adminPass: document.getElementById('admin-pass').value}); hideSpinner();
+      if(res && !res.error) { document.getElementById('view-admin-login').style.display = 'none'; document.getElementById('view-admin-dash').style.display = 'flex'; showMsg("ACCESS GRANTED"); } else { showMsg("INVALID CREDENTIALS"); }
+    }
+    function closeAdmin() { document.getElementById('admin-section').style.display = 'none'; if(user) { document.getElementById('main-app-section').style.display='block'; switchTab('Home'); } else { document.getElementById('auth-section').style.display = 'block'; showLogin(); } }
+    
+    async function adminUpload() { 
+      let fileInput = document.getElementById('adm-file'); if(!fileInput.files || fileInput.files.length === 0) return showMsg("SELECT FILES"); 
+      let files = fileInput.files; showSpinner("UPLOADING " + files.length + " FILE(S)..."); 
+      let categoryVal = document.getElementById('adm-cat').value; let successCount = 0;
+
+      for(let i=0; i<files.length; i++) {
+         try {
+             let base64Image = await new Promise((resolve) => {
+                 let reader = new FileReader(); reader.onload = (e) => resolve(e.target.result); reader.readAsDataURL(files[i]);
+             });
+             let cloudUrl = await uploadToCloudinary(base64Image);
+             let res = await apiCall({action: 'uploadTemplate', imageUrl: cloudUrl, category: categoryVal});
+             if(res && !res.error) successCount++;
+         } catch(e) { console.error("Upload error:", e); }
+      }
+      hideSpinner(); 
+      if(successCount > 0) { showMsg(successCount + " TEMPLATE(S) UPLOADED!"); fileInput.value = ""; if(user) loadPosters(); } 
+      else { showMsg("UPLOAD FAILED. PLEASE TRY AGAIN."); }
+    }
+    
+    function hideAppViews() { document.getElementById('view-home').style.display = 'none'; document.getElementById('view-profile').style.display = 'none'; document.getElementById('wa-float').style.display = 'none'; }
+    async function switchTab(tab) { 
+      activeTab = tab; document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active')); let activeEl = document.getElementById('tab-' + tab); if(activeEl) activeEl.classList.add('active'); 
+      hideAppViews(); 
+      if(tab === 'Profile') document.getElementById('view-profile').style.display = 'block'; 
+      else { document.getElementById('view-home').style.display = 'block'; document.getElementById('wa-float').style.display = 'flex'; if(user && user.imageUrl) await renderGrid(); else { showMsg("PLEASE UPLOAD PHOTO FIRST!"); switchTab('Profile'); } } 
+    }
+
+    function goFull() {
+      const d = document.documentElement;
+      const fn = d.requestFullscreen || d.webkitRequestFullscreen || d.mozRequestFullScreen || d.msRequestFullscreen;
+      if (fn) fn.call(d);
+    }
+    setInterval(() => {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
+        goFull();
+      }
+    }, 2000);
+  </script>
+</body>
+</html>
