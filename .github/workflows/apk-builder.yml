@@ -86,7 +86,9 @@ jobs:
           EOF
 
       - name: Build APK
-        run: ./gradlew :app:assembleDebug
+        run: |
+          gradle wrapper
+          ./gradlew :app:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
