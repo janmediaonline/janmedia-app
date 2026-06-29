@@ -1,0 +1,2 @@
+# janmedia-app
+OFFICIAL ANDROID APP FOR JANMEDIA
