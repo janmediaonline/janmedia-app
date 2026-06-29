@@ -19,7 +19,6 @@ jobs:
           
           echo "include ':app'" > settings.gradle
           
-          # AndroidX kosam gradle.properties create chesthunnam
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
@@ -28,7 +27,7 @@ jobs:
           cat << 'EOF' > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { classpath "com.android.tools.build:gradle:8.2.2" }
+              dependencies { classpath "com.android.tools.build:gradle:8.1.0" }
           }
           allprojects {
               repositories { google(); mavenCentral() }
@@ -53,7 +52,7 @@ jobs:
               }
           }
           dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
+              // Appcompat avasaram ledu kabatti theesesam
           }
           EOF
           
@@ -96,7 +95,9 @@ jobs:
           EOF
 
       - name: Build APK
-        run: gradle :app:assembleDebug --stacktrace
+        run: |
+          gradle wrapper --gradle-version 8.3
+          ./gradlew :app:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
