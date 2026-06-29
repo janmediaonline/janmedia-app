@@ -27,7 +27,8 @@ jobs:
           cat << 'EOF' > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { classpath "com.android.tools.build:gradle:8.1.0" }
+              # Plugin version ni 8.4.2 ki update chesam
+              dependencies { classpath "com.android.tools.build:gradle:8.4.2" }
           }
           allprojects {
               repositories { google(); mavenCentral() }
@@ -50,9 +51,6 @@ jobs:
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
-          }
-          dependencies {
-              // Appcompat avasaram ledu kabatti theesesam
           }
           EOF
           
@@ -95,9 +93,8 @@ jobs:
           EOF
 
       - name: Build APK
-        run: |
-          gradle wrapper --gradle-version 8.3
-          ./gradlew :app:assembleDebug
+        # Direct ga gradle command vadesthunnam
+        run: gradle :app:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
