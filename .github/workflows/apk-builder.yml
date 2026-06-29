@@ -77,35 +77,44 @@ jobs:
           
           import android.Manifest;
           import android.app.Activity;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.ContentValues;
+          import android.net.Uri;
           import android.os.Build;
           import android.os.Bundle;
+          import android.os.Environment;
+          import android.provider.MediaStore;
+          import android.util.Base64;
+          import android.webkit.CookieManager;
+          import android.webkit.DownloadListener;
+          import android.webkit.JavascriptInterface;
+          import android.webkit.URLUtil;
+          import android.webkit.ValueCallback;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebResourceRequest;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
-          import android.webkit.WebChromeClient;
-          import android.webkit.WebResourceRequest;
-          import android.webkit.DownloadListener;
-          import android.app.DownloadManager;
-          import android.os.Environment;
-          import android.webkit.CookieManager;
-          import android.webkit.URLUtil;
           import android.widget.Toast;
-          import android.content.Intent;
-          import android.net.Uri;
-          import android.webkit.ValueCallback;
-          import java.net.URISyntaxException;
+          import java.io.File;
+          import java.io.FileOutputStream;
+          import java.io.OutputStream;
+          import java.text.SimpleDateFormat;
+          import java.util.Date;
+          import java.util.Locale;
 
           public class MainActivity extends Activity {
               private ValueCallback<Uri[]> mFilePathCallback;
               private final static int FILECHOOSER_RESULTCODE = 1;
+              private WebAppInterface webAppInterface;
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  WebView webView = new WebView(this);
+                  final WebView webView = new WebView(this);
                   setContentView(webView);
                   
-                  // Request Storage Permissions on startup
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                       requestPermissions(new String[]{
                           Manifest.permission.WRITE_EXTERNAL_STORAGE, 
@@ -119,24 +128,41 @@ jobs:
                   webSettings.setDomStorageEnabled(true);
                   webSettings.setAllowFileAccess(true);
                   
-                  // VERY IMPORTANT FOR PAYMENTS:
+                  // RAZORPAY UPI FIX: Spoof User-Agent to act like full Chrome
+                  String userAgent = webSettings.getUserAgentString();
+                  webSettings.setUserAgentString(userAgent.replace("; wv", ""));
+
                   CookieManager.getInstance().setAcceptCookie(true);
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                       CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
                   }
 
-                  // UPI AND DEEP LINK FIX
+                  // BRIDGE INTERFACE FOR SHARE AND DOWNLOADS
+                  webAppInterface = new WebAppInterface(this);
+                  webView.addJavascriptInterface(webAppInterface, "AndroidApp");
+
                   webView.setWebViewClient(new WebViewClient() {
+                      @Override
+                      public void onPageFinished(WebView view, String url) {
+                          super.onPageFinished(view, url);
+                          // SHARE FIX: Overriding Web Share API
+                          String injectShareJS = "javascript:(function() {" +
+                                  "navigator.share = function(data) {" +
+                                  "  return new Promise((resolve, reject) => {" +
+                                  "    AndroidApp.shareData(data.title, data.text, data.url);" +
+                                  "    resolve();" +
+                                  "  });" +
+                                  "};" +
+                                  "})();";
+                          view.evaluateJavascript(injectShareJS, null);
+                      }
+
                       @Override
                       public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                           String url = request.getUrl().toString();
-                          
-                          // Allow normal web links
                           if (url.startsWith("http://") || url.startsWith("https://")) {
                               return false;
                           }
-                          
-                          // Handle UPI, Intent, WhatsApp, Razorpay etc
                           try {
                               Intent intent;
                               if (url.startsWith("intent://")) {
@@ -152,7 +178,6 @@ jobs:
                               startActivity(intent);
                               return true;
                           } catch (Exception e) {
-                              Toast.makeText(getApplicationContext(), "App not found for this action", Toast.LENGTH_SHORT).show();
                               return true;
                           }
                       }
@@ -174,30 +199,50 @@ jobs:
                       }
                   });
 
-                  // DOWNLOADS FIX
+                  // DOWNLOAD FIX
                   webView.setDownloadListener(new DownloadListener() {
                       @Override
                       public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
-                          if (url.startsWith("blob:") || url.startsWith("data:")) {
-                              Toast.makeText(getApplicationContext(), "Image generation spotted. Please Long-Press the image to save it.", Toast.LENGTH_LONG).show();
-                              return;
-                          }
-                          try {
-                              DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
-                              request.setMimeType(mimetype);
-                              String cookies = CookieManager.getInstance().getCookie(url);
-                              request.addRequestHeader("cookie", cookies);
-                              request.addRequestHeader("User-Agent", userAgent);
-                              request.setDescription("Downloading file...");
-                              request.setTitle(URLUtil.guessFileName(url, contentDisposition, mimetype));
-                              request.allowScanningByMediaScanner();
-                              request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-                              request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, URLUtil.guessFileName(url, contentDisposition, mimetype));
-                              DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-                              dm.enqueue(request);
-                              Toast.makeText(getApplicationContext(), "Downloading...", Toast.LENGTH_SHORT).show();
-                          } catch (Exception e) {
-                              Toast.makeText(getApplicationContext(), "Download Failed", Toast.LENGTH_SHORT).show();
+                          if (url.startsWith("blob:")) {
+                              // Read blob via javascript and pass to java
+                              String js = "javascript:(function() {" +
+                                      "var xhr = new XMLHttpRequest();" +
+                                      "xhr.open('GET', '" + url + "', true);" +
+                                      "xhr.responseType = 'blob';" +
+                                      "xhr.onload = function(e) {" +
+                                      "    if (this.status == 200) {" +
+                                      "        var blob = this.response;" +
+                                      "        var reader = new FileReader();" +
+                                      "        reader.readAsDataURL(blob);" +
+                                      "        reader.onloadend = function() {" +
+                                      "            AndroidApp.getBase64FromBlobData(reader.result, '" + mimetype + "');" +
+                                      "        }" +
+                                      "    }" +
+                                      "};" +
+                                      "xhr.send();" +
+                                      "})();";
+                              webView.evaluateJavascript(js, null);
+                              Toast.makeText(getApplicationContext(), "Saving Poster...", Toast.LENGTH_SHORT).show();
+                          } else if (url.startsWith("data:")) {
+                              webAppInterface.getBase64FromBlobData(url, mimetype);
+                          } else {
+                              try {
+                                  android.app.DownloadManager.Request request = new android.app.DownloadManager.Request(Uri.parse(url));
+                                  request.setMimeType(mimetype);
+                                  String cookies = CookieManager.getInstance().getCookie(url);
+                                  request.addRequestHeader("cookie", cookies);
+                                  request.addRequestHeader("User-Agent", userAgent);
+                                  request.setDescription("Downloading file...");
+                                  request.setTitle(URLUtil.guessFileName(url, contentDisposition, mimetype));
+                                  request.allowScanningByMediaScanner();
+                                  request.setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                                  request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, URLUtil.guessFileName(url, contentDisposition, mimetype));
+                                  android.app.DownloadManager dm = (android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                                  dm.enqueue(request);
+                                  Toast.makeText(getApplicationContext(), "Downloading...", Toast.LENGTH_SHORT).show();
+                              } catch (Exception e) {
+                                  Toast.makeText(getApplicationContext(), "Download Failed", Toast.LENGTH_SHORT).show();
+                              }
                           }
                       }
                   });
@@ -214,6 +259,60 @@ jobs:
                       mFilePathCallback = null;
                   }
               }
+
+              public class WebAppInterface {
+                  Context mContext;
+                  WebAppInterface(Context c) { mContext = c; }
+
+                  @JavascriptInterface
+                  public void shareData(String title, String text, String url) {
+                      Intent sendIntent = new Intent();
+                      sendIntent.setAction(Intent.ACTION_SEND);
+                      String shareText = "";
+                      if (title != null && !title.equals("undefined") && !title.isEmpty()) shareText += title + "\n";
+                      if (text != null && !text.equals("undefined") && !text.isEmpty()) shareText += text + "\n";
+                      if (url != null && !url.equals("undefined") && !url.isEmpty()) shareText += url;
+                      sendIntent.putExtra(Intent.EXTRA_TEXT, shareText.trim());
+                      sendIntent.setType("text/plain");
+                      Intent shareIntent = Intent.createChooser(sendIntent, "Share Via");
+                      shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                      mContext.startActivity(shareIntent);
+                  }
+
+                  @JavascriptInterface
+                  public void getBase64FromBlobData(String base64Data, String mimeType) {
+                      try {
+                          String base64Image = base64Data.split(",")[1];
+                          byte[] decodedBytes = Base64.decode(base64Image, Base64.DEFAULT);
+                          String fileName = "JANMEDIA_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) + ".jpg";
+                          OutputStream fos;
+                          
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                              ContentValues values = new ContentValues();
+                              values.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
+                              values.put(MediaStore.MediaColumns.MIME_TYPE, mimeType != null && !mimeType.isEmpty() ? mimeType : "image/jpeg");
+                              values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES);
+                              Uri imageUri = mContext.getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+                              fos = mContext.getContentResolver().openOutputStream(imageUri);
+                          } else {
+                              File imageDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+                              if (!imageDir.exists()) imageDir.mkdirs();
+                              File imageFile = new File(imageDir, fileName);
+                              fos = new FileOutputStream(imageFile);
+                          }
+                          fos.write(decodedBytes);
+                          fos.close();
+                          
+                          ((Activity) mContext).runOnUiThread(new Runnable() {
+                              public void run() { Toast.makeText(mContext, "Poster Saved to Gallery!", Toast.LENGTH_LONG).show(); }
+                          });
+                      } catch (Exception e) {
+                          ((Activity) mContext).runOnUiThread(new Runnable() {
+                              public void run() { Toast.makeText(mContext, "Failed to save poster", Toast.LENGTH_SHORT).show(); }
+                          });
+                      }
+                  }
+              }
           }
           EOF
 
@@ -225,4 +324,3 @@ jobs:
         with:
           name: JANMEDIA-APK
           path: app/build/outputs/apk/debug/app-debug.apk
-          
