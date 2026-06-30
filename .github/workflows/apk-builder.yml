@@ -60,10 +60,10 @@ jobs:
           }
           EOF
 
-          # APP ICON DOWNLOAD
+          # APP ICON
           wget -O app/src/main/res/drawable/app_icon.png "https://i.ibb.co/k2xvqfWG/file-00000000bd8c720b9158f7b8d2b5dd9a.png"
 
-          # FILE PROVIDER PATHS (Images & Videos kosam)
+          # FILE PROVIDER
           cat << 'EOF' > app/src/main/res/xml/file_paths.xml
           <?xml version="1.0" encoding="utf-8"?>
           <paths>
@@ -71,7 +71,7 @@ jobs:
           </paths>
           EOF
           
-          # WHITE THEME TO REMOVE BLACK SCREEN
+          # THEME
           cat << 'EOF' > app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -86,11 +86,14 @@ jobs:
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <!-- Permissions -->
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
               <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
               
               <application android:label="JANMEDIA" android:icon="@drawable/app_icon" android:theme="@style/Theme.App" android:requestLegacyExternalStorage="true" android:usesCleartextTraffic="true" android:hardwareAccelerated="true">
                   <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|keyboardHidden|screenSize">
@@ -128,6 +131,7 @@ jobs:
           import android.os.Environment;
           import android.provider.MediaStore;
           import android.util.Base64;
+          import android.view.WindowManager;
           import android.webkit.CookieManager;
           import android.webkit.JavascriptInterface;
           import android.webkit.ValueCallback;
@@ -157,6 +161,9 @@ jobs:
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   
+                  // 🔥 BLOCK SCREENSHOTS & SCREEN RECORDING 🔥
+                  getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+                  
                   final WebView webView = new WebView(this);
                   webView.setBackgroundColor(Color.WHITE); 
                   setContentView(webView);
@@ -166,15 +173,20 @@ jobs:
                           Manifest.permission.WRITE_EXTERNAL_STORAGE, 
                           Manifest.permission.READ_EXTERNAL_STORAGE,
                           Manifest.permission.READ_MEDIA_IMAGES,
-                          Manifest.permission.READ_MEDIA_VIDEO
+                          Manifest.permission.READ_MEDIA_VIDEO,
+                          Manifest.permission.RECORD_AUDIO
                       }, 1);
                   }
                   
                   WebSettings webSettings = webView.getSettings();
                   webSettings.setJavaScriptEnabled(true);
                   webSettings.setDomStorageEnabled(true);
+                  
+                  // 🔥 AUDIO/VIDEO FIXES 🔥
                   webSettings.setAllowFileAccess(true);
-                  webSettings.setMediaPlaybackRequiresUserGesture(false); // Video autoplay kosam
+                  webSettings.setAllowUniversalAccessFromFileURLs(true);
+                  webSettings.setAllowFileAccessFromFileURLs(true);
+                  webSettings.setMediaPlaybackRequiresUserGesture(false); 
                   
                   String customUserAgent = "Mozilla/5.0 (Linux; Android 12; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36";
                   webSettings.setUserAgentString(customUserAgent);
@@ -196,9 +208,7 @@ jobs:
 
                       @Override
                       public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                          if (request.isForMainFrame()) {
-                              showOfflinePage(view);
-                          }
+                          if (request.isForMainFrame()) { showOfflinePage(view); }
                       }
 
                       @SuppressWarnings("deprecation")
@@ -211,12 +221,13 @@ jobs:
                       public void onPageFinished(WebView view, String url) {
                           super.onPageFinished(view, url);
                           
-                          // DYNAMIC SHARE INJECTOR (Images & Videos ki pani chestundi)
+                          // 🔥 SHARE FIX & PREVENT HANG 🔥
                           String jsShareFix = "javascript:(function() {" +
                                   "Object.defineProperty(navigator, 'canShare', { get: function() { return function() { return true; }; } });" +
                                   "Object.defineProperty(navigator, 'share', { get: function() { return function(data) {" +
                                   "  return new Promise((resolve, reject) => {" +
                                   "    if(data.files && data.files.length > 0) {" +
+                                  "        AndroidApp.showToast('Preparing to Share, Please Wait...');" +
                                   "        var reader = new FileReader();" +
                                   "        reader.onloadend = function() {" +
                                   "            AndroidApp.shareMedia(reader.result, data.text || '', data.files[0].name || '');" +
@@ -232,14 +243,32 @@ jobs:
                                   "})();";
                           view.evaluateJavascript(jsShareFix, null);
                           
-                          // DYNAMIC DOWNLOAD INJECTOR
+                          // 🔥 BLOB VIDEO DOWNLOAD FIX 🔥
                           String jsDownloadFix = "javascript:(function() {" +
                                   "document.addEventListener('click', function(e) {" +
                                   "    var el = e.target.closest('a[download]');" +
-                                  "    if(el && el.href && el.href.startsWith('data:')) {" +
-                                  "        e.preventDefault();" +
-                                  "        e.stopPropagation();" +
-                                  "        AndroidApp.downloadMedia(el.href, el.download);" +
+                                  "    if(el && el.href) {" +
+                                  "        if(el.href.startsWith('data:')) {" +
+                                  "            e.preventDefault(); e.stopPropagation();" +
+                                  "            AndroidApp.showToast('Saving Media...');" +
+                                  "            AndroidApp.downloadMedia(el.href, el.download);" +
+                                  "        } else if(el.href.startsWith('blob:')) {" +
+                                  "            e.preventDefault(); e.stopPropagation();" +
+                                  "            AndroidApp.showToast('Downloading Video, Please Wait...');" +
+                                  "            var xhr = new XMLHttpRequest();" +
+                                  "            xhr.open('GET', el.href, true);" +
+                                  "            xhr.responseType = 'blob';" +
+                                  "            xhr.onload = function() {" +
+                                  "                if (this.status == 200) {" +
+                                  "                    var reader = new FileReader();" +
+                                  "                    reader.onloadend = function() {" +
+                                  "                        AndroidApp.downloadMedia(reader.result, el.download);" +
+                                  "                    };" +
+                                  "                    reader.readAsDataURL(this.response);" +
+                                  "                }" +
+                                  "            };" +
+                                  "            xhr.send();" +
+                                  "        }" +
                                   "    }" +
                                   "}, true);" +
                                   "})();";
@@ -284,7 +313,6 @@ jobs:
                           mFilePathCallback = filePathCallback;
                           Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                           intent.addCategory(Intent.CATEGORY_OPENABLE);
-                          // Ippudu images mariyu videos rendu theesukuntundi (Admin Uploads kosam)
                           intent.setType("*/*");
                           intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "video/*"});
                           startActivityForResult(Intent.createChooser(intent, "Select File"), FILECHOOSER_RESULTCODE);
@@ -308,6 +336,11 @@ jobs:
               public class WebAppInterface {
                   Context mContext;
                   WebAppInterface(Context c) { mContext = c; }
+                  
+                  @JavascriptInterface
+                  public void showToast(String message) {
+                      Toast.makeText(mContext, message, Toast.LENGTH_SHORT).show();
+                  }
 
                   @JavascriptInterface
                   public void shareText(String title, String text, String url) {
@@ -319,101 +352,108 @@ jobs:
                       mContext.startActivity(Intent.createChooser(sendIntent, "Share Via"));
                   }
 
-                  // 🔴 SHARE INTERFACE (Handles Images & Videos)
+                  // 🔥 BACKGROUND THREAD FOR SHARE (NO HANGS) 🔥
                   @JavascriptInterface
-                  public void shareMedia(String base64Data, String text, String fileName) {
-                      try {
-                          String mimeType = "image/webp";
-                          String extension = ".webp";
-                          
-                          if (base64Data.startsWith("data:")) {
-                              mimeType = base64Data.substring(5, base64Data.indexOf(";"));
+                  public void shareMedia(final String base64Data, final String text, final String fileName) {
+                      new Thread(new Runnable() {
+                          @Override
+                          public void run() {
+                              try {
+                                  String mimeType = "image/webp";
+                                  String extension = ".webp";
+                                  
+                                  if (base64Data.startsWith("data:")) {
+                                      mimeType = base64Data.substring(5, base64Data.indexOf(";"));
+                                  }
+                                  
+                                  if (mimeType.contains("mp4")) extension = ".mp4";
+                                  else if (mimeType.contains("webm")) extension = ".webm";
+                                  else if (mimeType.contains("png")) extension = ".png";
+                                  else if (mimeType.contains("jpeg") || mimeType.contains("jpg")) extension = ".jpg";
+
+                                  String actualFileName = (fileName != null && !fileName.isEmpty()) ? fileName : ("janmedia_share" + extension);
+                                  String base64Raw = base64Data.substring(base64Data.indexOf(",") + 1);
+                                  byte[] decodedBytes = Base64.decode(base64Raw, Base64.DEFAULT);
+
+                                  File cachePath = new File(mContext.getCacheDir(), "media");
+                                  cachePath.mkdirs();
+                                  File file = new File(cachePath, actualFileName);
+                                  FileOutputStream fos = new FileOutputStream(file);
+                                  fos.write(decodedBytes);
+                                  fos.close();
+
+                                  Uri mediaUri = FileProvider.getUriForFile(mContext, "com.janmedia.app.fileprovider", file);
+                                  
+                                  Intent shareIntent = new Intent();
+                                  shareIntent.setAction(Intent.ACTION_SEND);
+                                  shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                                  shareIntent.setDataAndType(mediaUri, mimeType);
+                                  shareIntent.putExtra(Intent.EXTRA_STREAM, mediaUri);
+                                  if(text != null && !text.isEmpty()) {
+                                      shareIntent.putExtra(Intent.EXTRA_TEXT, text);
+                                  }
+                                  mContext.startActivity(Intent.createChooser(shareIntent, "Share"));
+                              } catch (Exception e) {
+                                  ((Activity) mContext).runOnUiThread(() -> Toast.makeText(mContext, "Share failed", Toast.LENGTH_SHORT).show());
+                              }
                           }
-                          
-                          if (mimeType.contains("mp4")) extension = ".mp4";
-                          else if (mimeType.contains("webm")) extension = ".webm";
-                          else if (mimeType.contains("png")) extension = ".png";
-                          else if (mimeType.contains("jpeg") || mimeType.contains("jpg")) extension = ".jpg";
-
-                          String actualFileName = (fileName != null && !fileName.isEmpty()) ? fileName : ("janmedia_share" + extension);
-                          String base64Raw = base64Data.substring(base64Data.indexOf(",") + 1);
-                          byte[] decodedBytes = Base64.decode(base64Raw, Base64.DEFAULT);
-
-                          File cachePath = new File(mContext.getCacheDir(), "media");
-                          cachePath.mkdirs();
-                          File file = new File(cachePath, actualFileName);
-                          FileOutputStream fos = new FileOutputStream(file);
-                          fos.write(decodedBytes);
-                          fos.close();
-
-                          Uri mediaUri = FileProvider.getUriForFile(mContext, "com.janmedia.app.fileprovider", file);
-                          
-                          Intent shareIntent = new Intent();
-                          shareIntent.setAction(Intent.ACTION_SEND);
-                          shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                          shareIntent.setDataAndType(mediaUri, mimeType);
-                          shareIntent.putExtra(Intent.EXTRA_STREAM, mediaUri);
-                          if(text != null && !text.isEmpty()) {
-                              shareIntent.putExtra(Intent.EXTRA_TEXT, text);
-                          }
-                          mContext.startActivity(Intent.createChooser(shareIntent, "Share"));
-                      } catch (Exception e) {
-                          ((Activity) mContext).runOnUiThread(() -> Toast.makeText(mContext, "Share failed", Toast.LENGTH_SHORT).show());
-                      }
+                      }).start();
                   }
 
-                  // 🔴 DOWNLOAD INTERFACE (Handles Images & Videos to correct folders)
+                  // 🔥 BACKGROUND THREAD FOR DOWNLOAD (NO HANGS) 🔥
                   @JavascriptInterface
-                  public void downloadMedia(String base64Data, String fileName) {
-                      try {
-                          String mimeType = "image/webp";
-                          String extension = ".webp";
-                          String targetFolder = Environment.DIRECTORY_PICTURES;
-                          
-                          if (base64Data.startsWith("data:")) {
-                              mimeType = base64Data.substring(5, base64Data.indexOf(";"));
-                          }
+                  public void downloadMedia(final String base64Data, final String fileName) {
+                      new Thread(new Runnable() {
+                          @Override
+                          public void run() {
+                              try {
+                                  String mimeType = "image/webp";
+                                  String extension = ".webp";
+                                  String targetFolder = Environment.DIRECTORY_PICTURES;
+                                  
+                                  if (base64Data.startsWith("data:")) {
+                                      mimeType = base64Data.substring(5, base64Data.indexOf(";"));
+                                  }
 
-                          if (mimeType.contains("video")) {
-                              targetFolder = Environment.DIRECTORY_MOVIES;
-                              if (mimeType.contains("mp4")) extension = ".mp4";
-                              else if (mimeType.contains("webm")) extension = ".webm";
-                          } else {
-                              if (mimeType.contains("png")) extension = ".png";
-                              else if (mimeType.contains("jpeg") || mimeType.contains("jpg")) extension = ".jpg";
-                          }
-                          
-                          if(fileName == null || fileName.isEmpty()) {
-                              fileName = "JANMEDIA_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) + extension;
-                          }
+                                  if (mimeType.contains("video")) {
+                                      targetFolder = Environment.DIRECTORY_MOVIES;
+                                      if (mimeType.contains("mp4")) extension = ".mp4";
+                                      else if (mimeType.contains("webm")) extension = ".webm";
+                                  } else {
+                                      if (mimeType.contains("png")) extension = ".png";
+                                      else if (mimeType.contains("jpeg") || mimeType.contains("jpg")) extension = ".jpg";
+                                  }
+                                  
+                                  String finalFileName = (fileName != null && !fileName.isEmpty()) ? fileName : ("JANMEDIA_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) + extension);
+                                  String base64Raw = base64Data.substring(base64Data.indexOf(",") + 1);
+                                  byte[] decodedBytes = Base64.decode(base64Raw, Base64.DEFAULT);
 
-                          String base64Raw = base64Data.substring(base64Data.indexOf(",") + 1);
-                          byte[] decodedBytes = Base64.decode(base64Raw, Base64.DEFAULT);
-
-                          OutputStream fos;
-                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                              ContentValues values = new ContentValues();
-                              values.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
-                              values.put(MediaStore.MediaColumns.MIME_TYPE, mimeType);
-                              values.put(MediaStore.MediaColumns.RELATIVE_PATH, targetFolder);
-                              
-                              Uri collection = mimeType.contains("video") ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI : MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
-                              Uri mediaUri = mContext.getContentResolver().insert(collection, values);
-                              fos = mContext.getContentResolver().openOutputStream(mediaUri);
-                          } else {
-                              File mediaDir = Environment.getExternalStoragePublicDirectory(targetFolder);
-                              if (!mediaDir.exists()) mediaDir.mkdirs();
-                              File mediaFile = new File(mediaDir, fileName);
-                              fos = new FileOutputStream(mediaFile);
+                                  OutputStream fos;
+                                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                      ContentValues values = new ContentValues();
+                                      values.put(MediaStore.MediaColumns.DISPLAY_NAME, finalFileName);
+                                      values.put(MediaStore.MediaColumns.MIME_TYPE, mimeType);
+                                      values.put(MediaStore.MediaColumns.RELATIVE_PATH, targetFolder);
+                                      
+                                      Uri collection = mimeType.contains("video") ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI : MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+                                      Uri mediaUri = mContext.getContentResolver().insert(collection, values);
+                                      fos = mContext.getContentResolver().openOutputStream(mediaUri);
+                                  } else {
+                                      File mediaDir = Environment.getExternalStoragePublicDirectory(targetFolder);
+                                      if (!mediaDir.exists()) mediaDir.mkdirs();
+                                      File mediaFile = new File(mediaDir, finalFileName);
+                                      fos = new FileOutputStream(mediaFile);
+                                  }
+                                  fos.write(decodedBytes);
+                                  fos.close();
+                                  
+                                  final String successMsg = mimeType.contains("video") ? "Video Saved to Gallery!" : "Poster Saved to Gallery!";
+                                  ((Activity) mContext).runOnUiThread(() -> Toast.makeText(mContext, successMsg, Toast.LENGTH_LONG).show());
+                              } catch (Exception e) {
+                                  ((Activity) mContext).runOnUiThread(() -> Toast.makeText(mContext, "Download Failed", Toast.LENGTH_SHORT).show());
+                              }
                           }
-                          fos.write(decodedBytes);
-                          fos.close();
-                          
-                          final String successMsg = mimeType.contains("video") ? "Video Saved to Gallery!" : "Poster Saved to Gallery!";
-                          ((Activity) mContext).runOnUiThread(() -> Toast.makeText(mContext, successMsg, Toast.LENGTH_LONG).show());
-                      } catch (Exception e) {
-                          ((Activity) mContext).runOnUiThread(() -> Toast.makeText(mContext, "Download Failed", Toast.LENGTH_SHORT).show());
-                      }
+                      }).start();
                   }
               }
           }
