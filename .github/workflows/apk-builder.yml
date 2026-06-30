@@ -63,15 +63,15 @@ jobs:
           # APP ICON DOWNLOAD
           wget -O app/src/main/res/drawable/app_icon.png "https://i.ibb.co/k2xvqfWG/file-00000000bd8c720b9158f7b8d2b5dd9a.png"
 
-          # FILE PROVIDER PATHS
+          # FILE PROVIDER PATHS (Images & Videos kosam)
           cat << 'EOF' > app/src/main/res/xml/file_paths.xml
           <?xml version="1.0" encoding="utf-8"?>
           <paths>
-              <cache-path name="shared_images" path="images/"/>
+              <cache-path name="shared_media" path="media/"/>
           </paths>
           EOF
           
-          # WHITE THEME
+          # WHITE THEME TO REMOVE BLACK SCREEN
           cat << 'EOF' > app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -90,8 +90,9 @@ jobs:
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
               
-              <application android:label="JANMEDIA" android:icon="@drawable/app_icon" android:theme="@style/Theme.App" android:requestLegacyExternalStorage="true" android:usesCleartextTraffic="true">
+              <application android:label="JANMEDIA" android:icon="@drawable/app_icon" android:theme="@style/Theme.App" android:requestLegacyExternalStorage="true" android:usesCleartextTraffic="true" android:hardwareAccelerated="true">
                   <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|keyboardHidden|screenSize">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -164,7 +165,8 @@ jobs:
                       requestPermissions(new String[]{
                           Manifest.permission.WRITE_EXTERNAL_STORAGE, 
                           Manifest.permission.READ_EXTERNAL_STORAGE,
-                          Manifest.permission.READ_MEDIA_IMAGES
+                          Manifest.permission.READ_MEDIA_IMAGES,
+                          Manifest.permission.READ_MEDIA_VIDEO
                       }, 1);
                   }
                   
@@ -172,6 +174,7 @@ jobs:
                   webSettings.setJavaScriptEnabled(true);
                   webSettings.setDomStorageEnabled(true);
                   webSettings.setAllowFileAccess(true);
+                  webSettings.setMediaPlaybackRequiresUserGesture(false); // Video autoplay kosam
                   
                   String customUserAgent = "Mozilla/5.0 (Linux; Android 12; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36";
                   webSettings.setUserAgentString(customUserAgent);
@@ -185,7 +188,7 @@ jobs:
                   webView.addJavascriptInterface(webAppInterface, "AndroidApp");
 
                   webView.setWebViewClient(new WebViewClient() {
-                      // OFFLINE / NETWORK ERROR FIX
+                      // OFFLINE PAGE
                       private void showOfflinePage(WebView view) {
                           String customErrorPage = "<html><body style=\"display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; margin:0; font-family:sans-serif; background-color:#ffffff; color:#002A5C; text-align:center;\"><h2 style=\"font-weight:900; font-size:24px; padding:20px;\">PLEASE CONNECT YOUR INTERNET \uD83D\uDFDC</h2><p style=\"font-size:14px; font-weight:bold; color:#FF5E00; margin-top:30px;\">POWERED BY JANMEDIA</p></body></html>";
                           view.loadData(customErrorPage, "text/html", "UTF-8");
@@ -208,6 +211,7 @@ jobs:
                       public void onPageFinished(WebView view, String url) {
                           super.onPageFinished(view, url);
                           
+                          // DYNAMIC SHARE INJECTOR (Images & Videos ki pani chestundi)
                           String jsShareFix = "javascript:(function() {" +
                                   "Object.defineProperty(navigator, 'canShare', { get: function() { return function() { return true; }; } });" +
                                   "Object.defineProperty(navigator, 'share', { get: function() { return function(data) {" +
@@ -215,7 +219,7 @@ jobs:
                                   "    if(data.files && data.files.length > 0) {" +
                                   "        var reader = new FileReader();" +
                                   "        reader.onloadend = function() {" +
-                                  "            AndroidApp.shareImage(reader.result, data.text || '');" +
+                                  "            AndroidApp.shareMedia(reader.result, data.text || '', data.files[0].name || '');" +
                                   "            resolve();" +
                                   "        };" +
                                   "        reader.readAsDataURL(data.files[0]);" +
@@ -228,13 +232,14 @@ jobs:
                                   "})();";
                           view.evaluateJavascript(jsShareFix, null);
                           
+                          // DYNAMIC DOWNLOAD INJECTOR
                           String jsDownloadFix = "javascript:(function() {" +
                                   "document.addEventListener('click', function(e) {" +
                                   "    var el = e.target.closest('a[download]');" +
                                   "    if(el && el.href && el.href.startsWith('data:')) {" +
                                   "        e.preventDefault();" +
                                   "        e.stopPropagation();" +
-                                  "        AndroidApp.downloadImage(el.href, el.download);" +
+                                  "        AndroidApp.downloadMedia(el.href, el.download);" +
                                   "    }" +
                                   "}, true);" +
                                   "})();";
@@ -244,10 +249,7 @@ jobs:
                       @Override
                       public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                           String url = request.getUrl().toString();
-                          
-                          if (url.startsWith("http://") || url.startsWith("https://")) {
-                              return false;
-                          }
+                          if (url.startsWith("http://") || url.startsWith("https://")) { return false; }
                           
                           if (url.startsWith("intent://")) {
                               try {
@@ -267,7 +269,7 @@ jobs:
                                   startActivity(intent);
                                   return true;
                               } catch (Exception e) {
-                                  Toast.makeText(getApplicationContext(), "UPI App not installed", Toast.LENGTH_SHORT).show();
+                                  Toast.makeText(getApplicationContext(), "App not installed", Toast.LENGTH_SHORT).show();
                                   return true;
                               }
                           }
@@ -282,8 +284,10 @@ jobs:
                           mFilePathCallback = filePathCallback;
                           Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                           intent.addCategory(Intent.CATEGORY_OPENABLE);
-                          intent.setType("image/*");
-                          startActivityForResult(Intent.createChooser(intent, "Select Photo"), FILECHOOSER_RESULTCODE);
+                          // Ippudu images mariyu videos rendu theesukuntundi (Admin Uploads kosam)
+                          intent.setType("*/*");
+                          intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "video/*"});
+                          startActivityForResult(Intent.createChooser(intent, "Select File"), FILECHOOSER_RESULTCODE);
                           return true;
                       }
                   });
@@ -315,63 +319,98 @@ jobs:
                       mContext.startActivity(Intent.createChooser(sendIntent, "Share Via"));
                   }
 
+                  // 🔴 SHARE INTERFACE (Handles Images & Videos)
                   @JavascriptInterface
-                  public void shareImage(String base64Data, String text) {
+                  public void shareMedia(String base64Data, String text, String fileName) {
                       try {
-                          String base64Image = base64Data.split(",")[1];
-                          byte[] decodedBytes = Base64.decode(base64Image, Base64.DEFAULT);
+                          String mimeType = "image/webp";
+                          String extension = ".webp";
                           
-                          File cachePath = new File(mContext.getCacheDir(), "images");
+                          if (base64Data.startsWith("data:")) {
+                              mimeType = base64Data.substring(5, base64Data.indexOf(";"));
+                          }
+                          
+                          if (mimeType.contains("mp4")) extension = ".mp4";
+                          else if (mimeType.contains("webm")) extension = ".webm";
+                          else if (mimeType.contains("png")) extension = ".png";
+                          else if (mimeType.contains("jpeg") || mimeType.contains("jpg")) extension = ".jpg";
+
+                          String actualFileName = (fileName != null && !fileName.isEmpty()) ? fileName : ("janmedia_share" + extension);
+                          String base64Raw = base64Data.substring(base64Data.indexOf(",") + 1);
+                          byte[] decodedBytes = Base64.decode(base64Raw, Base64.DEFAULT);
+
+                          File cachePath = new File(mContext.getCacheDir(), "media");
                           cachePath.mkdirs();
-                          File file = new File(cachePath, "janmedia_share.webp");
+                          File file = new File(cachePath, actualFileName);
                           FileOutputStream fos = new FileOutputStream(file);
                           fos.write(decodedBytes);
                           fos.close();
 
-                          Uri imageUri = FileProvider.getUriForFile(mContext, "com.janmedia.app.fileprovider", file);
+                          Uri mediaUri = FileProvider.getUriForFile(mContext, "com.janmedia.app.fileprovider", file);
                           
                           Intent shareIntent = new Intent();
                           shareIntent.setAction(Intent.ACTION_SEND);
                           shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                          shareIntent.setDataAndType(imageUri, mContext.getContentResolver().getType(imageUri));
-                          shareIntent.putExtra(Intent.EXTRA_STREAM, imageUri);
+                          shareIntent.setDataAndType(mediaUri, mimeType);
+                          shareIntent.putExtra(Intent.EXTRA_STREAM, mediaUri);
                           if(text != null && !text.isEmpty()) {
                               shareIntent.putExtra(Intent.EXTRA_TEXT, text);
                           }
-                          mContext.startActivity(Intent.createChooser(shareIntent, "Share Poster"));
+                          mContext.startActivity(Intent.createChooser(shareIntent, "Share"));
                       } catch (Exception e) {
                           ((Activity) mContext).runOnUiThread(() -> Toast.makeText(mContext, "Share failed", Toast.LENGTH_SHORT).show());
                       }
                   }
 
+                  // 🔴 DOWNLOAD INTERFACE (Handles Images & Videos to correct folders)
                   @JavascriptInterface
-                  public void downloadImage(String base64Data, String fileName) {
+                  public void downloadMedia(String base64Data, String fileName) {
                       try {
-                          String base64Image = base64Data.split(",")[1];
-                          byte[] decodedBytes = Base64.decode(base64Image, Base64.DEFAULT);
+                          String mimeType = "image/webp";
+                          String extension = ".webp";
+                          String targetFolder = Environment.DIRECTORY_PICTURES;
+                          
+                          if (base64Data.startsWith("data:")) {
+                              mimeType = base64Data.substring(5, base64Data.indexOf(";"));
+                          }
+
+                          if (mimeType.contains("video")) {
+                              targetFolder = Environment.DIRECTORY_MOVIES;
+                              if (mimeType.contains("mp4")) extension = ".mp4";
+                              else if (mimeType.contains("webm")) extension = ".webm";
+                          } else {
+                              if (mimeType.contains("png")) extension = ".png";
+                              else if (mimeType.contains("jpeg") || mimeType.contains("jpg")) extension = ".jpg";
+                          }
                           
                           if(fileName == null || fileName.isEmpty()) {
-                              fileName = "JANMEDIA_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) + ".webp";
+                              fileName = "JANMEDIA_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) + extension;
                           }
+
+                          String base64Raw = base64Data.substring(base64Data.indexOf(",") + 1);
+                          byte[] decodedBytes = Base64.decode(base64Raw, Base64.DEFAULT);
 
                           OutputStream fos;
                           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                               ContentValues values = new ContentValues();
                               values.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
-                              values.put(MediaStore.MediaColumns.MIME_TYPE, "image/webp");
-                              values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES);
-                              Uri imageUri = mContext.getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
-                              fos = mContext.getContentResolver().openOutputStream(imageUri);
+                              values.put(MediaStore.MediaColumns.MIME_TYPE, mimeType);
+                              values.put(MediaStore.MediaColumns.RELATIVE_PATH, targetFolder);
+                              
+                              Uri collection = mimeType.contains("video") ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI : MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+                              Uri mediaUri = mContext.getContentResolver().insert(collection, values);
+                              fos = mContext.getContentResolver().openOutputStream(mediaUri);
                           } else {
-                              File imageDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
-                              if (!imageDir.exists()) imageDir.mkdirs();
-                              File imageFile = new File(imageDir, fileName);
-                              fos = new FileOutputStream(imageFile);
+                              File mediaDir = Environment.getExternalStoragePublicDirectory(targetFolder);
+                              if (!mediaDir.exists()) mediaDir.mkdirs();
+                              File mediaFile = new File(mediaDir, fileName);
+                              fos = new FileOutputStream(mediaFile);
                           }
                           fos.write(decodedBytes);
                           fos.close();
                           
-                          ((Activity) mContext).runOnUiThread(() -> Toast.makeText(mContext, "Poster Saved to Gallery!", Toast.LENGTH_LONG).show());
+                          final String successMsg = mimeType.contains("video") ? "Video Saved to Gallery!" : "Poster Saved to Gallery!";
+                          ((Activity) mContext).runOnUiThread(() -> Toast.makeText(mContext, successMsg, Toast.LENGTH_LONG).show());
                       } catch (Exception e) {
                           ((Activity) mContext).runOnUiThread(() -> Toast.makeText(mContext, "Download Failed", Toast.LENGTH_SHORT).show());
                       }
