@@ -128,6 +128,7 @@ jobs:
           import android.content.ContentValues;
           import android.graphics.Color;
           import android.graphics.Typeface;
+          import android.graphics.drawable.ColorDrawable;
           import android.net.ConnectivityManager;
           import android.net.NetworkInfo;
           import android.net.Uri;
@@ -186,26 +187,34 @@ jobs:
                   view.loadDataWithBaseURL(null, customErrorPage, "text/html", "UTF-8", null);
               }
               
+              // 🔥 TRANSPARENT PROGRESS SPINNER 🔥
               private void initProgressDialog() {
                   progressDialog = new Dialog(this);
                   progressDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
                   progressDialog.setCancelable(false);
                   
+                  if (progressDialog.getWindow() != null) {
+                      progressDialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                      progressDialog.getWindow().setDimAmount(0.7f);
+                  }
+                  
                   LinearLayout layout = new LinearLayout(this);
                   layout.setOrientation(LinearLayout.VERTICAL);
-                  layout.setPadding(80, 80, 80, 80);
+                  layout.setPadding(40, 40, 40, 40);
                   layout.setGravity(Gravity.CENTER);
-                  layout.setBackgroundColor(Color.WHITE);
+                  layout.setBackgroundColor(Color.TRANSPARENT);
                   
                   ProgressBar progressBar = new ProgressBar(this);
+                  progressBar.getIndeterminateDrawable().setColorFilter(Color.WHITE, android.graphics.PorterDuff.Mode.MULTIPLY);
                   layout.addView(progressBar);
                   
                   progressText = new TextView(this);
                   progressText.setText("Preparing...");
-                  progressText.setTextColor(Color.parseColor("#002A5C"));
-                  progressText.setTextSize(15);
-                  progressText.setPadding(0, 40, 0, 0);
+                  progressText.setTextColor(Color.WHITE);
+                  progressText.setTextSize(16);
+                  progressText.setPadding(0, 30, 0, 0);
                   progressText.setTypeface(null, Typeface.BOLD);
+                  progressText.setGravity(Gravity.CENTER);
                   layout.addView(progressText);
                   
                   progressDialog.setContentView(layout);
@@ -215,7 +224,6 @@ jobs:
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   
-                  // 🔥 BLOCK SCREENSHOTS 🔥
                   getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
                   
                   final WebView webView = new WebView(this);
@@ -236,7 +244,6 @@ jobs:
                   webSettings.setJavaScriptEnabled(true);
                   webSettings.setDomStorageEnabled(true);
                   
-                  // 🔥 AUDIO / VIDEO CORS FIXES 🔥
                   webSettings.setAllowFileAccess(true);
                   webSettings.setAllowContentAccess(true);
                   webSettings.setAllowUniversalAccessFromFileURLs(true);
@@ -271,7 +278,7 @@ jobs:
                       public void onPageFinished(WebView view, String url) {
                           super.onPageFinished(view, url);
                           
-                          // 🔥 THE MASTER JAVASCRIPT INJECTOR (FIXES ZIP, AUDIO, LAG & PROGRESS) 🔥
+                          // 🔥 THE MASTER JAVASCRIPT INJECTOR (FIXES SYNC, SILENT AUDIO, ZIP, LAG & PROGRESS) 🔥
                           String masterJs = "javascript:(function() {" +
                                   "window.sendToAndroid = function(dataUrl, fileName, isShare) {" +
                                   "   var mimeType = dataUrl.split(';')[0].split(':')[1];" +
@@ -279,7 +286,7 @@ jobs:
                                   "   var ext = mimeType.includes('mp4') ? '.mp4' : (mimeType.includes('webm') ? '.webm' : '.jpg');" +
                                   "   if(!fileName) { fileName = 'JANMEDIA_' + new Date().getTime() + ext; }" +
                                   "   AndroidApp.startTransfer(fileName, mimeType, isShare);" +
-                                  "   var chunkSize = 500000;" + // Safe 500KB chunks avoids corruption
+                                  "   var chunkSize = 500000;" + 
                                   "   for(var i=0; i<base64Data.length; i+=chunkSize) {" +
                                   "       AndroidApp.appendChunk(base64Data.substring(i, i+chunkSize));" +
                                   "   }" +
@@ -321,10 +328,12 @@ jobs:
                                   "}, true);" +
                                   "window.processAndDownloadVideo = async function(videoUrl, actionType, nColor, pColor) {" +
                                   "  if(!user || !user.imageUrl || !user.name) { switchTab('Profile'); return; }" +
+                                  "  document.querySelectorAll('video').forEach(v => { v.pause(); });" + // 🔥 Pauses background videos
                                   "  AndroidApp.showProgress('Connecting Media...');" +
                                   "  try {" +
                                   "    const video = document.createElement('video');" +
-                                  "    video.crossOrigin = 'anonymous'; video.src = videoUrl; video.playsInline = true; video.muted = false;" +
+                                  "    video.crossOrigin = 'anonymous'; video.src = videoUrl; video.playsInline = true;" +
+                                  "    video.muted = false; video.playbackRate = 1.0;" + // Must be unmuted to capture audio
                                   "    await new Promise((resolve, reject) => { video.onloadedmetadata = resolve; video.onerror = reject; });" +
                                   "    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');" +
                                   "    const targetW = 720; const targetH = 720; const footerH = 166;" +
@@ -333,13 +342,12 @@ jobs:
                                   "    await new Promise(r => { uImg.onload = r; uImg.onerror = r; });" +
                                   "    let fontName = (localStorage.getItem('poster_lang') || 'telugu') === 'english' ? \"'Poppins', sans-serif\" : \"'Sree Krushnadevaraya', serif\";" +
                                   "    const stream = canvas.captureStream(30);" +
-                                  "    if (video.captureStream) {" +
-                                  "      const audioStream = video.captureStream();" +
-                                  "      if (audioStream.getAudioTracks().length > 0) stream.addTrack(audioStream.getAudioTracks()[0]);" +
-                                  "    } else if (video.mozCaptureStream) {" +
-                                  "      const audioStream = video.mozCaptureStream();" +
-                                  "      if (audioStream.getAudioTracks().length > 0) stream.addTrack(audioStream.getAudioTracks()[0]);" +
-                                  "    }" +
+                                  "    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();" +
+                                  "    const source = audioCtx.createMediaElementSource(video);" +
+                                  "    const dest = audioCtx.createMediaStreamDestination();" +
+                                  "    source.connect(dest);" + // 🔥 Connects to destination stream, NOT speakers (SILENT PROCESSING)
+                                  "    const audioTrack = dest.stream.getAudioTracks()[0];" +
+                                  "    if(audioTrack) stream.addTrack(audioTrack);" +
                                   "    let mimeType = 'video/webm';" +
                                   "    const recorder = new MediaRecorder(stream, { mimeType: mimeType });" +
                                   "    const chunks = []; recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };" +
@@ -415,7 +423,6 @@ jobs:
                   });
 
                   webView.setWebChromeClient(new WebChromeClient() {
-                      // ALLOW AUDIO PERMISSIONS
                       @Override
                       public void onPermissionRequest(final PermissionRequest request) {
                           request.grant(request.getResources());
@@ -479,7 +486,7 @@ jobs:
                   public void updateProgress(final int percent) {
                       ((Activity) mContext).runOnUiThread(() -> {
                           if(progressDialog != null && progressDialog.isShowing()) {
-                              progressText.setText("Processing Video: " + percent + "%");
+                              progressText.setText(percent + "%");
                           }
                       });
                   }
@@ -503,7 +510,6 @@ jobs:
                       mContext.startActivity(Intent.createChooser(sendIntent, "Share Via"));
                   }
 
-                  // 🔥 CHUNKED TRANSFER FIX (NO HANGS, NO ZIPS, FULL AUDIO) 🔥
                   @JavascriptInterface
                   public void startTransfer(String fileName, String mimeType, boolean isShare) {
                       try {
