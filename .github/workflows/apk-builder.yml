@@ -63,7 +63,7 @@ jobs:
           # APP ICON
           wget -O app/src/main/res/drawable/app_icon.png "https://i.ibb.co/k2xvqfWG/file-00000000bd8c720b9158f7b8d2b5dd9a.png"
 
-          # FILE PROVIDER PATHS
+          # FILE PROVIDER
           cat << 'EOF' > app/src/main/res/xml/file_paths.xml
           <?xml version="1.0" encoding="utf-8"?>
           <paths>
@@ -71,7 +71,7 @@ jobs:
           </paths>
           EOF
           
-          # WHITE THEME
+          # THEME
           cat << 'EOF' > app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -86,7 +86,6 @@ jobs:
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <!-- Permissions for Media, Network & Audio -->
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
@@ -122,10 +121,12 @@ jobs:
           
           import android.Manifest;
           import android.app.Activity;
+          import android.app.Dialog;
           import android.content.Context;
           import android.content.Intent;
           import android.content.ContentValues;
           import android.graphics.Color;
+          import android.graphics.Typeface;
           import android.net.ConnectivityManager;
           import android.net.NetworkInfo;
           import android.net.Uri;
@@ -134,6 +135,8 @@ jobs:
           import android.os.Environment;
           import android.provider.MediaStore;
           import android.util.Base64;
+          import android.view.Gravity;
+          import android.view.Window;
           import android.view.WindowManager;
           import android.webkit.CookieManager;
           import android.webkit.JavascriptInterface;
@@ -144,6 +147,9 @@ jobs:
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
+          import android.widget.LinearLayout;
+          import android.widget.ProgressBar;
+          import android.widget.TextView;
           import android.widget.Toast;
           import androidx.appcompat.app.AppCompatActivity;
           import androidx.core.content.FileProvider;
@@ -159,8 +165,11 @@ jobs:
               private ValueCallback<Uri[]> mFilePathCallback;
               private final static int FILECHOOSER_RESULTCODE = 1;
               private WebAppInterface webAppInterface;
+              
+              // Progress Dialog UI Variables
+              private Dialog progressDialog;
+              private TextView progressText;
 
-              // 🔥 NETWORK CHECK FUNCTION 🔥
               private boolean isNetworkAvailable() {
                   ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
                   if (connectivityManager != null) {
@@ -170,17 +179,42 @@ jobs:
                   return false;
               }
 
-              // 🔥 SHOW CUSTOM OFFLINE PAGE 🔥
               private void showOfflinePage(WebView view) {
                   String customErrorPage = "<html><body style=\"display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; margin:0; font-family:sans-serif; background-color:#ffffff; color:#002A5C; text-align:center;\"><h2 style=\"font-weight:900; font-size:24px; padding:20px;\">PLEASE CONNECT YOUR INTERNET \uD83D\uDFDC</h2><p style=\"font-size:14px; font-weight:bold; color:#FF5E00; margin-top:30px;\">POWERED BY JANMEDIA</p></body></html>";
                   view.loadDataWithBaseURL(null, customErrorPage, "text/html", "UTF-8", null);
+              }
+              
+              // UI Code for Professional Native Progress Spinner
+              private void initProgressDialog() {
+                  progressDialog = new Dialog(this);
+                  progressDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+                  progressDialog.setCancelable(false);
+                  
+                  LinearLayout layout = new LinearLayout(this);
+                  layout.setOrientation(LinearLayout.VERTICAL);
+                  layout.setPadding(80, 80, 80, 80);
+                  layout.setGravity(Gravity.CENTER);
+                  layout.setBackgroundColor(Color.WHITE);
+                  
+                  ProgressBar progressBar = new ProgressBar(this);
+                  layout.addView(progressBar);
+                  
+                  progressText = new TextView(this);
+                  progressText.setText("Preparing...");
+                  progressText.setTextColor(Color.parseColor("#002A5C"));
+                  progressText.setTextSize(15);
+                  progressText.setPadding(0, 40, 0, 0);
+                  progressText.setTypeface(null, Typeface.BOLD);
+                  layout.addView(progressText);
+                  
+                  progressDialog.setContentView(layout);
               }
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   
-                  // 🔥 BLOCK SCREENSHOTS 🔥
+                  // 🔥 BLOCK SCREENSHOTS & SCREEN RECORDING 🔥
                   getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
                   
                   final WebView webView = new WebView(this);
@@ -201,7 +235,6 @@ jobs:
                   webSettings.setJavaScriptEnabled(true);
                   webSettings.setDomStorageEnabled(true);
                   
-                  // 🔥 AUDIO / VIDEO CORS FIXES 🔥
                   webSettings.setAllowFileAccess(true);
                   webSettings.setAllowContentAccess(true);
                   webSettings.setAllowUniversalAccessFromFileURLs(true);
@@ -236,17 +269,86 @@ jobs:
                       public void onPageFinished(WebView view, String url) {
                           super.onPageFinished(view, url);
                           
-                          // 🔥 SHARE FIX (BACKGROUND PROCESS TO AVOID HANG) 🔥
+                          // 🔥 100% FIXED VIDEO SPEED & AUDIO INJECTION 🔥
+                          // Overrides Blogger JS to fix mobile processing limits
+                          String jsVideoOverride = "javascript:(function() {" +
+                                  "window.processAndDownloadVideo = async function(videoUrl, actionType, nColor, pColor) {" +
+                                  "  if(!user || !user.imageUrl || !user.name) { switchTab('Profile'); return; }" +
+                                  "  AndroidApp.showProgress('Connecting Media...');" +
+                                  "  try {" +
+                                  "    const video = document.createElement('video');" +
+                                  "    video.crossOrigin = 'anonymous'; video.src = videoUrl; video.playsInline = true; video.muted = false;" +
+                                  "    await new Promise((resolve, reject) => { video.onloadedmetadata = resolve; video.onerror = reject; });" +
+                                  "    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');" +
+                                  "    const targetW = 720; const targetH = 720; const footerH = 166;" +
+                                  "    canvas.width = targetW; canvas.height = targetH + footerH;" +
+                                  "    let uImg = new Image(); uImg.crossOrigin = 'anonymous'; uImg.src = user.imageUrl;" +
+                                  "    await new Promise(r => { uImg.onload = r; uImg.onerror = r; });" +
+                                  "    let fontName = (localStorage.getItem('poster_lang') || 'telugu') === 'english' ? \"'Poppins', sans-serif\" : \"'Sree Krushnadevaraya', serif\";" +
+                                  "    const stream = canvas.captureStream(30);" +
+                                  "    if (video.captureStream) {" +
+                                  "      const audioStream = video.captureStream();" +
+                                  "      if (audioStream.getAudioTracks().length > 0) stream.addTrack(audioStream.getAudioTracks()[0]);" +
+                                  "    } else if (video.mozCaptureStream) {" +
+                                  "      const audioStream = video.mozCaptureStream();" +
+                                  "      if (audioStream.getAudioTracks().length > 0) stream.addTrack(audioStream.getAudioTracks()[0]);" +
+                                  "    }" +
+                                  "    let mimeType = 'video/mp4';" +
+                                  "    if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';" +
+                                  "    const recorder = new MediaRecorder(stream, { mimeType: mimeType });" +
+                                  "    const chunks = []; recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };" +
+                                  "    recorder.onstop = async () => {" +
+                                  "      AndroidApp.showProgress('Finalizing File...');" +
+                                  "      const blob = new Blob(chunks, { type: 'video/mp4' });" +
+                                  "      let fileName = 'JANMEDIA_Video_' + new Date().getTime() + '.mp4';" +
+                                  "      var reader = new FileReader();" +
+                                  "      reader.onloadend = function() {" +
+                                  "        if (actionType === 'share') { AndroidApp.shareMedia(reader.result, '', fileName); }" +
+                                  "        else { AndroidApp.downloadMedia(reader.result, fileName); }" +
+                                  "        AndroidApp.hideProgress();" +
+                                  "      };" +
+                                  "      reader.readAsDataURL(blob);" +
+                                  "    };" +
+                                  "    recorder.start(); video.play().catch(e => { console.log(e); });" +
+                                  "    const progressInterval = setInterval(() => {" +
+                                  "      if(video.duration) { let pct = Math.floor((video.currentTime / video.duration) * 100); AndroidApp.updateProgress(pct); }" +
+                                  "    }, 300);" +
+                                  "    function drawFrame() {" +
+                                  "      if(video.paused || video.ended) { clearInterval(progressInterval); return; }" +
+                                  "      ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(video, 0, 0, targetW, targetH);" +
+                                  "      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, targetH, targetW, footerH);" +
+                                  "      ctx.fillStyle = '#002A5C'; ctx.fillRect(0, targetH, targetW, 8);" +
+                                  "      if(partyLogoImg.width) { ctx.globalAlpha = 0.1; ctx.drawImage(partyLogoImg, 6, targetH + 6, footerH - 12, footerH - 12); ctx.globalAlpha = 1.0; }" +
+                                  "      let profileX = targetW;" +
+                                  "      if(uImg.width) { let uH = footerH + 40; let uW = (uImg.width / uImg.height) * uH; profileX = targetW - uW - 20; ctx.drawImage(uImg, profileX, targetH - 40, uW, uH); }" +
+                                  "      let textStartX = 26; let maxTextW = profileX - textStartX - 6;" +
+                                  "      let nameFontSize = 56; ctx.font = 'bold ' + nameFontSize + 'px ' + fontName;" +
+                                  "      while(ctx.measureText(user.name).width > maxTextW - 60 && nameFontSize > 24) { nameFontSize -= 2; ctx.font = 'bold ' + nameFontSize + 'px ' + fontName; }" +
+                                  "      ctx.fillStyle = nColor; ctx.textAlign = 'left'; ctx.fillText(user.name, textStartX, targetH + 76);" +
+                                  "      if(cycleLogoImg.width) { let nameW = ctx.measureText(user.name).width; ctx.drawImage(cycleLogoImg, textStartX + nameW + 10, targetH + 33, 46, 46); }" +
+                                  "      let posFontSize = 30; ctx.font = 'bold ' + posFontSize + 'px ' + fontName;" +
+                                  "      while(ctx.measureText(user.position || '').width > maxTextW && posFontSize > 14) { posFontSize -= 2; ctx.font = 'bold ' + posFontSize + 'px ' + fontName; }" +
+                                  "      ctx.fillStyle = pColor; ctx.fillText(user.position || '', textStartX, targetH + 130);" +
+                                  "      requestAnimationFrame(drawFrame);" +
+                                  "    }" +
+                                  "    video.addEventListener('play', () => { drawFrame(); });" +
+                                  "    video.addEventListener('ended', () => { recorder.stop(); });" +
+                                  "  } catch(e) { AndroidApp.hideProgress(); AndroidApp.showToast('Error processing video!'); }" +
+                                  "};" +
+                                  "})();";
+                          view.evaluateJavascript(jsVideoOverride, null);
+
+                          // General Share/Download catch fixes
                           String jsShareFix = "javascript:(function() {" +
                                   "Object.defineProperty(navigator, 'canShare', { get: function() { return function() { return true; }; } });" +
                                   "Object.defineProperty(navigator, 'share', { get: function() { return function(data) {" +
                                   "  return new Promise((resolve, reject) => {" +
                                   "    if(data.files && data.files.length > 0) {" +
-                                  "        AndroidApp.showToast('Preparing Media, Please Wait...');" +
+                                  "        AndroidApp.showProgress('Preparing to Share...');" +
                                   "        var reader = new FileReader();" +
                                   "        reader.onloadend = function() {" +
                                   "            AndroidApp.shareMedia(reader.result, data.text || '', data.files[0].name || '');" +
-                                  "            resolve();" +
+                                  "            AndroidApp.hideProgress(); resolve();" +
                                   "        };" +
                                   "        reader.readAsDataURL(data.files[0]);" +
                                   "    } else {" +
@@ -258,18 +360,17 @@ jobs:
                                   "})();";
                           view.evaluateJavascript(jsShareFix, null);
                           
-                          // 🔥 DOWNLOAD FIX (BACKGROUND PROCESS TO AVOID HANG) 🔥
                           String jsDownloadFix = "javascript:(function() {" +
                                   "document.addEventListener('click', function(e) {" +
                                   "    var el = e.target.closest('a[download]');" +
                                   "    if(el && el.href) {" +
                                   "        if(el.href.startsWith('data:')) {" +
                                   "            e.preventDefault(); e.stopPropagation();" +
-                                  "            AndroidApp.showToast('Saving Media...');" +
+                                  "            AndroidApp.showProgress('Saving Media...');" +
                                   "            AndroidApp.downloadMedia(el.href, el.download);" +
                                   "        } else if(el.href.startsWith('blob:')) {" +
                                   "            e.preventDefault(); e.stopPropagation();" +
-                                  "            AndroidApp.showToast('Downloading Video, Please Wait...');" +
+                                  "            AndroidApp.showProgress('Preparing Video Download...');" +
                                   "            var xhr = new XMLHttpRequest();" +
                                   "            xhr.open('GET', el.href, true);" +
                                   "            xhr.responseType = 'blob';" +
@@ -335,7 +436,6 @@ jobs:
                       }
                   });
 
-                  // 🔥 STARTUP NETWORK CHECK 🔥
                   if (!isNetworkAvailable()) {
                       showOfflinePage(webView);
                   } else {
@@ -359,7 +459,34 @@ jobs:
                   
                   @JavascriptInterface
                   public void showToast(String message) {
-                      Toast.makeText(mContext, message, Toast.LENGTH_SHORT).show();
+                      ((Activity) mContext).runOnUiThread(() -> Toast.makeText(mContext, message, Toast.LENGTH_SHORT).show());
+                  }
+                  
+                  @JavascriptInterface
+                  public void showProgress(final String text) {
+                      ((Activity) mContext).runOnUiThread(() -> {
+                          if(progressDialog == null) initProgressDialog();
+                          progressText.setText(text);
+                          if(!progressDialog.isShowing()) progressDialog.show();
+                      });
+                  }
+                  
+                  @JavascriptInterface
+                  public void updateProgress(final int percent) {
+                      ((Activity) mContext).runOnUiThread(() -> {
+                          if(progressDialog != null && progressDialog.isShowing()) {
+                              progressText.setText("Processing Video: " + percent + "%");
+                          }
+                      });
+                  }
+                  
+                  @JavascriptInterface
+                  public void hideProgress() {
+                      ((Activity) mContext).runOnUiThread(() -> {
+                          if(progressDialog != null && progressDialog.isShowing()) {
+                              progressDialog.dismiss();
+                          }
+                      });
                   }
 
                   @JavascriptInterface
@@ -411,9 +538,15 @@ jobs:
                                   if(text != null && !text.isEmpty()) {
                                       shareIntent.putExtra(Intent.EXTRA_TEXT, text);
                                   }
-                                  mContext.startActivity(Intent.createChooser(shareIntent, "Share"));
+                                  ((Activity) mContext).runOnUiThread(() -> {
+                                      hideProgress();
+                                      mContext.startActivity(Intent.createChooser(shareIntent, "Share Media"));
+                                  });
                               } catch (Exception e) {
-                                  ((Activity) mContext).runOnUiThread(() -> Toast.makeText(mContext, "Share failed", Toast.LENGTH_SHORT).show());
+                                  ((Activity) mContext).runOnUiThread(() -> {
+                                      hideProgress();
+                                      Toast.makeText(mContext, "❌ Error sharing media", Toast.LENGTH_SHORT).show();
+                                  });
                               }
                           }
                       }).start();
@@ -465,10 +598,16 @@ jobs:
                                   fos.write(decodedBytes);
                                   fos.close();
                                   
-                                  final String successMsg = mimeType.contains("video") ? "Video Saved to Gallery!" : "Poster Saved to Gallery!";
-                                  ((Activity) mContext).runOnUiThread(() -> Toast.makeText(mContext, successMsg, Toast.LENGTH_LONG).show());
+                                  final String successMsg = mimeType.contains("video") ? "✅ Video Saved Successfully" : "✅ Poster Saved Successfully";
+                                  ((Activity) mContext).runOnUiThread(() -> {
+                                      hideProgress();
+                                      Toast.makeText(mContext, successMsg, Toast.LENGTH_LONG).show();
+                                  });
                               } catch (Exception e) {
-                                  ((Activity) mContext).runOnUiThread(() -> Toast.makeText(mContext, "Download Failed", Toast.LENGTH_SHORT).show());
+                                  ((Activity) mContext).runOnUiThread(() -> {
+                                      hideProgress();
+                                      Toast.makeText(mContext, "❌ Download Failed", Toast.LENGTH_SHORT).show();
+                                  });
                               }
                           }
                       }).start();
