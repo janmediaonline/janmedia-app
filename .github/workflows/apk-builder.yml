@@ -86,6 +86,7 @@ jobs:
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <!-- Permissions -->
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
@@ -140,6 +141,7 @@ jobs:
           import android.view.WindowManager;
           import android.webkit.CookieManager;
           import android.webkit.JavascriptInterface;
+          import android.webkit.PermissionRequest;
           import android.webkit.ValueCallback;
           import android.webkit.WebChromeClient;
           import android.webkit.WebResourceError;
@@ -155,6 +157,7 @@ jobs:
           import androidx.core.content.FileProvider;
           
           import java.io.File;
+          import java.io.FileInputStream;
           import java.io.FileOutputStream;
           import java.io.OutputStream;
           import java.text.SimpleDateFormat;
@@ -166,7 +169,6 @@ jobs:
               private final static int FILECHOOSER_RESULTCODE = 1;
               private WebAppInterface webAppInterface;
               
-              // Progress Dialog UI Variables
               private Dialog progressDialog;
               private TextView progressText;
 
@@ -184,7 +186,6 @@ jobs:
                   view.loadDataWithBaseURL(null, customErrorPage, "text/html", "UTF-8", null);
               }
               
-              // UI Code for Professional Native Progress Spinner
               private void initProgressDialog() {
                   progressDialog = new Dialog(this);
                   progressDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -214,7 +215,7 @@ jobs:
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   
-                  // 🔥 BLOCK SCREENSHOTS & SCREEN RECORDING 🔥
+                  // 🔥 BLOCK SCREENSHOTS 🔥
                   getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
                   
                   final WebView webView = new WebView(this);
@@ -235,6 +236,7 @@ jobs:
                   webSettings.setJavaScriptEnabled(true);
                   webSettings.setDomStorageEnabled(true);
                   
+                  // 🔥 AUDIO / VIDEO CORS FIXES 🔥
                   webSettings.setAllowFileAccess(true);
                   webSettings.setAllowContentAccess(true);
                   webSettings.setAllowUniversalAccessFromFileURLs(true);
@@ -269,9 +271,54 @@ jobs:
                       public void onPageFinished(WebView view, String url) {
                           super.onPageFinished(view, url);
                           
-                          // 🔥 100% FIXED VIDEO SPEED & AUDIO INJECTION 🔥
-                          // Overrides Blogger JS to fix mobile processing limits
-                          String jsVideoOverride = "javascript:(function() {" +
+                          // 🔥 THE MASTER JAVASCRIPT INJECTOR (FIXES ZIP, AUDIO, LAG & PROGRESS) 🔥
+                          String masterJs = "javascript:(function() {" +
+                                  "window.sendToAndroid = function(dataUrl, fileName, isShare) {" +
+                                  "   var mimeType = dataUrl.split(';')[0].split(':')[1];" +
+                                  "   var base64Data = dataUrl.split(',')[1];" +
+                                  "   var ext = mimeType.includes('mp4') ? '.mp4' : (mimeType.includes('webm') ? '.webm' : '.jpg');" +
+                                  "   if(!fileName) { fileName = 'JANMEDIA_' + new Date().getTime() + ext; }" +
+                                  "   AndroidApp.startTransfer(fileName, mimeType, isShare);" +
+                                  "   var chunkSize = 500000;" + // Safe 500KB chunks avoids corruption
+                                  "   for(var i=0; i<base64Data.length; i+=chunkSize) {" +
+                                  "       AndroidApp.appendChunk(base64Data.substring(i, i+chunkSize));" +
+                                  "   }" +
+                                  "   AndroidApp.endTransfer();" +
+                                  "};" +
+                                  "Object.defineProperty(navigator, 'canShare', { get: function() { return function() { return true; }; } });" +
+                                  "Object.defineProperty(navigator, 'share', { get: function() { return function(data) {" +
+                                  "  return new Promise((resolve, reject) => {" +
+                                  "    if(data.files && data.files.length > 0) {" +
+                                  "        AndroidApp.showProgress('Preparing to Share...');" +
+                                  "        var reader = new FileReader();" +
+                                  "        reader.onloadend = function() { window.sendToAndroid(reader.result, data.files[0].name, true); resolve(); };" +
+                                  "        reader.readAsDataURL(data.files[0]);" +
+                                  "    } else {" +
+                                  "        AndroidApp.shareText(data.title || '', data.text || '', data.url || ''); resolve();" +
+                                  "    }" +
+                                  "  });" +
+                                  "}; } });" +
+                                  "document.addEventListener('click', function(e) {" +
+                                  "    var el = e.target.closest('a[download]');" +
+                                  "    if(el && el.href) {" +
+                                  "        if(el.href.startsWith('data:')) {" +
+                                  "            e.preventDefault(); e.stopPropagation();" +
+                                  "            AndroidApp.showProgress('Saving Poster...');" +
+                                  "            window.sendToAndroid(el.href, el.download, false);" +
+                                  "        } else if(el.href.startsWith('blob:')) {" +
+                                  "            e.preventDefault(); e.stopPropagation();" +
+                                  "            AndroidApp.showProgress('Preparing Download...');" +
+                                  "            var xhr = new XMLHttpRequest(); xhr.open('GET', el.href, true); xhr.responseType = 'blob';" +
+                                  "            xhr.onload = function() {" +
+                                  "                if (this.status == 200) {" +
+                                  "                    var reader = new FileReader();" +
+                                  "                    reader.onloadend = function() { window.sendToAndroid(reader.result, el.download, false); };" +
+                                  "                    reader.readAsDataURL(this.response);" +
+                                  "                }" +
+                                  "            }; xhr.send();" +
+                                  "        }" +
+                                  "    }" +
+                                  "}, true);" +
                                   "window.processAndDownloadVideo = async function(videoUrl, actionType, nColor, pColor) {" +
                                   "  if(!user || !user.imageUrl || !user.name) { switchTab('Profile'); return; }" +
                                   "  AndroidApp.showProgress('Connecting Media...');" +
@@ -293,19 +340,16 @@ jobs:
                                   "      const audioStream = video.mozCaptureStream();" +
                                   "      if (audioStream.getAudioTracks().length > 0) stream.addTrack(audioStream.getAudioTracks()[0]);" +
                                   "    }" +
-                                  "    let mimeType = 'video/mp4';" +
-                                  "    if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';" +
+                                  "    let mimeType = 'video/webm';" +
                                   "    const recorder = new MediaRecorder(stream, { mimeType: mimeType });" +
                                   "    const chunks = []; recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };" +
                                   "    recorder.onstop = async () => {" +
                                   "      AndroidApp.showProgress('Finalizing File...');" +
-                                  "      const blob = new Blob(chunks, { type: 'video/mp4' });" +
-                                  "      let fileName = 'JANMEDIA_Video_' + new Date().getTime() + '.mp4';" +
+                                  "      const blob = new Blob(chunks, { type: mimeType });" +
+                                  "      let fileName = 'JANMEDIA_Video_' + new Date().getTime() + '.webm';" +
                                   "      var reader = new FileReader();" +
                                   "      reader.onloadend = function() {" +
-                                  "        if (actionType === 'share') { AndroidApp.shareMedia(reader.result, '', fileName); }" +
-                                  "        else { AndroidApp.downloadMedia(reader.result, fileName); }" +
-                                  "        AndroidApp.hideProgress();" +
+                                  "          window.sendToAndroid(reader.result, fileName, actionType === 'share');" +
                                   "      };" +
                                   "      reader.readAsDataURL(blob);" +
                                   "    };" +
@@ -336,59 +380,7 @@ jobs:
                                   "  } catch(e) { AndroidApp.hideProgress(); AndroidApp.showToast('Error processing video!'); }" +
                                   "};" +
                                   "})();";
-                          view.evaluateJavascript(jsVideoOverride, null);
-
-                          // General Share/Download catch fixes
-                          String jsShareFix = "javascript:(function() {" +
-                                  "Object.defineProperty(navigator, 'canShare', { get: function() { return function() { return true; }; } });" +
-                                  "Object.defineProperty(navigator, 'share', { get: function() { return function(data) {" +
-                                  "  return new Promise((resolve, reject) => {" +
-                                  "    if(data.files && data.files.length > 0) {" +
-                                  "        AndroidApp.showProgress('Preparing to Share...');" +
-                                  "        var reader = new FileReader();" +
-                                  "        reader.onloadend = function() {" +
-                                  "            AndroidApp.shareMedia(reader.result, data.text || '', data.files[0].name || '');" +
-                                  "            AndroidApp.hideProgress(); resolve();" +
-                                  "        };" +
-                                  "        reader.readAsDataURL(data.files[0]);" +
-                                  "    } else {" +
-                                  "        AndroidApp.shareText(data.title || '', data.text || '', data.url || '');" +
-                                  "        resolve();" +
-                                  "    }" +
-                                  "  });" +
-                                  "}; } });" +
-                                  "})();";
-                          view.evaluateJavascript(jsShareFix, null);
-                          
-                          String jsDownloadFix = "javascript:(function() {" +
-                                  "document.addEventListener('click', function(e) {" +
-                                  "    var el = e.target.closest('a[download]');" +
-                                  "    if(el && el.href) {" +
-                                  "        if(el.href.startsWith('data:')) {" +
-                                  "            e.preventDefault(); e.stopPropagation();" +
-                                  "            AndroidApp.showProgress('Saving Media...');" +
-                                  "            AndroidApp.downloadMedia(el.href, el.download);" +
-                                  "        } else if(el.href.startsWith('blob:')) {" +
-                                  "            e.preventDefault(); e.stopPropagation();" +
-                                  "            AndroidApp.showProgress('Preparing Video Download...');" +
-                                  "            var xhr = new XMLHttpRequest();" +
-                                  "            xhr.open('GET', el.href, true);" +
-                                  "            xhr.responseType = 'blob';" +
-                                  "            xhr.onload = function() {" +
-                                  "                if (this.status == 200) {" +
-                                  "                    var reader = new FileReader();" +
-                                  "                    reader.onloadend = function() {" +
-                                  "                        AndroidApp.downloadMedia(reader.result, el.download);" +
-                                  "                    };" +
-                                  "                    reader.readAsDataURL(this.response);" +
-                                  "                }" +
-                                  "            };" +
-                                  "            xhr.send();" +
-                                  "        }" +
-                                  "    }" +
-                                  "}, true);" +
-                                  "})();";
-                          view.evaluateJavascript(jsDownloadFix, null);
+                          view.evaluateJavascript(masterJs, null);
                       }
 
                       @Override
@@ -423,6 +415,12 @@ jobs:
                   });
 
                   webView.setWebChromeClient(new WebChromeClient() {
+                      // ALLOW AUDIO PERMISSIONS
+                      @Override
+                      public void onPermissionRequest(final PermissionRequest request) {
+                          request.grant(request.getResources());
+                      }
+
                       @Override
                       public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
                           if (mFilePathCallback != null) mFilePathCallback.onReceiveValue(null);
@@ -455,6 +453,12 @@ jobs:
 
               public class WebAppInterface {
                   Context mContext;
+                  private FileOutputStream fos;
+                  private File currentFile;
+                  private String currentFileName;
+                  private String currentMimeType;
+                  private boolean currentIsShare;
+
                   WebAppInterface(Context c) { mContext = c; }
                   
                   @JavascriptInterface
@@ -499,116 +503,91 @@ jobs:
                       mContext.startActivity(Intent.createChooser(sendIntent, "Share Via"));
                   }
 
+                  // 🔥 CHUNKED TRANSFER FIX (NO HANGS, NO ZIPS, FULL AUDIO) 🔥
                   @JavascriptInterface
-                  public void shareMedia(final String base64Data, final String text, final String fileName) {
-                      new Thread(new Runnable() {
-                          @Override
-                          public void run() {
-                              try {
-                                  String mimeType = "image/webp";
-                                  String extension = ".webp";
-                                  
-                                  if (base64Data.startsWith("data:")) {
-                                      mimeType = base64Data.substring(5, base64Data.indexOf(";"));
-                                  }
-                                  
-                                  if (mimeType.contains("mp4")) extension = ".mp4";
-                                  else if (mimeType.contains("webm")) extension = ".webm";
-                                  else if (mimeType.contains("png")) extension = ".png";
-                                  else if (mimeType.contains("jpeg") || mimeType.contains("jpg")) extension = ".jpg";
-
-                                  String actualFileName = (fileName != null && !fileName.isEmpty()) ? fileName : ("janmedia_share" + extension);
-                                  String base64Raw = base64Data.substring(base64Data.indexOf(",") + 1);
-                                  byte[] decodedBytes = Base64.decode(base64Raw, Base64.DEFAULT);
-
-                                  File cachePath = new File(mContext.getCacheDir(), "media");
-                                  cachePath.mkdirs();
-                                  File file = new File(cachePath, actualFileName);
-                                  FileOutputStream fos = new FileOutputStream(file);
-                                  fos.write(decodedBytes);
-                                  fos.close();
-
-                                  Uri mediaUri = FileProvider.getUriForFile(mContext, "com.janmedia.app.fileprovider", file);
-                                  
-                                  Intent shareIntent = new Intent();
-                                  shareIntent.setAction(Intent.ACTION_SEND);
-                                  shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                                  shareIntent.setDataAndType(mediaUri, mimeType);
-                                  shareIntent.putExtra(Intent.EXTRA_STREAM, mediaUri);
-                                  if(text != null && !text.isEmpty()) {
-                                      shareIntent.putExtra(Intent.EXTRA_TEXT, text);
-                                  }
-                                  ((Activity) mContext).runOnUiThread(() -> {
-                                      hideProgress();
-                                      mContext.startActivity(Intent.createChooser(shareIntent, "Share Media"));
-                                  });
-                              } catch (Exception e) {
-                                  ((Activity) mContext).runOnUiThread(() -> {
-                                      hideProgress();
-                                      Toast.makeText(mContext, "❌ Error sharing media", Toast.LENGTH_SHORT).show();
-                                  });
-                              }
-                          }
-                      }).start();
+                  public void startTransfer(String fileName, String mimeType, boolean isShare) {
+                      try {
+                          currentFileName = fileName;
+                          currentMimeType = mimeType;
+                          currentIsShare = isShare;
+                          File cachePath = new File(mContext.getCacheDir(), "media");
+                          cachePath.mkdirs();
+                          currentFile = new File(cachePath, fileName);
+                          fos = new FileOutputStream(currentFile);
+                      } catch (Exception e) { e.printStackTrace(); }
                   }
 
                   @JavascriptInterface
-                  public void downloadMedia(final String base64Data, final String fileName) {
-                      new Thread(new Runnable() {
-                          @Override
-                          public void run() {
-                              try {
-                                  String mimeType = "image/webp";
-                                  String extension = ".webp";
-                                  String targetFolder = Environment.DIRECTORY_PICTURES;
-                                  
-                                  if (base64Data.startsWith("data:")) {
-                                      mimeType = base64Data.substring(5, base64Data.indexOf(";"));
-                                  }
+                  public void appendChunk(String base64Chunk) {
+                      try {
+                          byte[] decodedBytes = Base64.decode(base64Chunk, Base64.DEFAULT);
+                          if (fos != null) fos.write(decodedBytes);
+                      } catch (Exception e) { e.printStackTrace(); }
+                  }
 
-                                  if (mimeType.contains("video")) {
-                                      targetFolder = Environment.DIRECTORY_MOVIES;
-                                      if (mimeType.contains("mp4")) extension = ".mp4";
-                                      else if (mimeType.contains("webm")) extension = ".webm";
-                                  } else {
-                                      if (mimeType.contains("png")) extension = ".png";
-                                      else if (mimeType.contains("jpeg") || mimeType.contains("jpg")) extension = ".jpg";
-                                  }
+                  @JavascriptInterface
+                  public void endTransfer() {
+                      try {
+                          if (fos != null) { fos.flush(); fos.close(); }
+                          ((Activity) mContext).runOnUiThread(() -> {
+                              if (currentIsShare) { shareSavedFile(); } 
+                              else { copyFileToGallery(); }
+                          });
+                      } catch (Exception e) { e.printStackTrace(); }
+                  }
+                  
+                  private void shareSavedFile() {
+                      hideProgress();
+                      Uri mediaUri = FileProvider.getUriForFile(mContext, "com.janmedia.app.fileprovider", currentFile);
+                      Intent shareIntent = new Intent(Intent.ACTION_SEND);
+                      shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                      shareIntent.setDataAndType(mediaUri, currentMimeType);
+                      shareIntent.putExtra(Intent.EXTRA_STREAM, mediaUri);
+                      mContext.startActivity(Intent.createChooser(shareIntent, "Share Media"));
+                  }
+                  
+                  private void copyFileToGallery() {
+                      new Thread(() -> {
+                          try {
+                              String targetFolder = currentMimeType.contains("video") ? Environment.DIRECTORY_MOVIES : Environment.DIRECTORY_PICTURES;
+                              OutputStream outStream;
+                              
+                              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                  ContentValues values = new ContentValues();
+                                  values.put(MediaStore.MediaColumns.DISPLAY_NAME, currentFileName);
+                                  values.put(MediaStore.MediaColumns.MIME_TYPE, currentMimeType);
+                                  values.put(MediaStore.MediaColumns.RELATIVE_PATH, targetFolder);
                                   
-                                  String finalFileName = (fileName != null && !fileName.isEmpty()) ? fileName : ("JANMEDIA_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) + extension);
-                                  String base64Raw = base64Data.substring(base64Data.indexOf(",") + 1);
-                                  byte[] decodedBytes = Base64.decode(base64Raw, Base64.DEFAULT);
-
-                                  OutputStream fos;
-                                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                      ContentValues values = new ContentValues();
-                                      values.put(MediaStore.MediaColumns.DISPLAY_NAME, finalFileName);
-                                      values.put(MediaStore.MediaColumns.MIME_TYPE, mimeType);
-                                      values.put(MediaStore.MediaColumns.RELATIVE_PATH, targetFolder);
-                                      
-                                      Uri collection = mimeType.contains("video") ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI : MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
-                                      Uri mediaUri = mContext.getContentResolver().insert(collection, values);
-                                      fos = mContext.getContentResolver().openOutputStream(mediaUri);
-                                  } else {
-                                      File mediaDir = Environment.getExternalStoragePublicDirectory(targetFolder);
-                                      if (!mediaDir.exists()) mediaDir.mkdirs();
-                                      File mediaFile = new File(mediaDir, finalFileName);
-                                      fos = new FileOutputStream(mediaFile);
-                                  }
-                                  fos.write(decodedBytes);
-                                  fos.close();
-                                  
-                                  final String successMsg = mimeType.contains("video") ? "✅ Video Saved Successfully" : "✅ Poster Saved Successfully";
-                                  ((Activity) mContext).runOnUiThread(() -> {
-                                      hideProgress();
-                                      Toast.makeText(mContext, successMsg, Toast.LENGTH_LONG).show();
-                                  });
-                              } catch (Exception e) {
-                                  ((Activity) mContext).runOnUiThread(() -> {
-                                      hideProgress();
-                                      Toast.makeText(mContext, "❌ Download Failed", Toast.LENGTH_SHORT).show();
-                                  });
+                                  Uri collection = currentMimeType.contains("video") ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI : MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+                                  Uri mediaUri = mContext.getContentResolver().insert(collection, values);
+                                  outStream = mContext.getContentResolver().openOutputStream(mediaUri);
+                              } else {
+                                  File mediaDir = Environment.getExternalStoragePublicDirectory(targetFolder);
+                                  if (!mediaDir.exists()) mediaDir.mkdirs();
+                                  File destFile = new File(mediaDir, currentFileName);
+                                  outStream = new FileOutputStream(destFile);
                               }
+                              
+                              FileInputStream fis = new FileInputStream(currentFile);
+                              byte[] buffer = new byte[4096];
+                              int length;
+                              while ((length = fis.read(buffer)) > 0) {
+                                  outStream.write(buffer, 0, length);
+                              }
+                              fis.close();
+                              outStream.close();
+                              
+                              final String successMsg = currentMimeType.contains("video") ? "✅ Video Saved to Gallery!" : "✅ Poster Saved to Gallery!";
+                              ((Activity) mContext).runOnUiThread(() -> {
+                                  hideProgress();
+                                  Toast.makeText(mContext, successMsg, Toast.LENGTH_LONG).show();
+                              });
+                          } catch (Exception e) {
+                              e.printStackTrace();
+                              ((Activity) mContext).runOnUiThread(() -> {
+                                  hideProgress();
+                                  Toast.makeText(mContext, "❌ Download Failed", Toast.LENGTH_SHORT).show();
+                              });
                           }
                       }).start();
                   }
